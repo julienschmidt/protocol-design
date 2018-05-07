@@ -1,4 +1,8 @@
 import asyncio
+import functools
+import os
+import signal
+import sys
 
 from os import listdir
 from os.path import isfile, join
@@ -43,6 +47,10 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         sent = self.sendto(message, addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
+    def signal(self, signame):
+        print("got signal %s: exit" % signame)
+        self.loop.stop()
+
 
 def run(args):
     loop = asyncio.get_event_loop()
@@ -56,10 +64,16 @@ def run(args):
         local_addr=server_address)
     transport, protocol = loop.run_until_complete(listen)
 
+    if sys.platform != 'win32':
+        for signame in ('SIGINT', 'SIGTERM'):
+            loop.add_signal_handler(getattr(signal, signame),
+                functools.partial(protocol.signal, signame))
+
+    print("Event loop running forever, press Ctrl+C to interrupt.")
+    print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
+
     try:
         loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-
-    transport.close()
-    loop.close()
+    finally:
+        transport.close()
+        loop.close()

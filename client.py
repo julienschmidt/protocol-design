@@ -1,5 +1,9 @@
 import asyncio
+import functools
+import os
 import random
+import signal
+import sys
 
 from lib import packettype
 from lib import sha256
@@ -18,6 +22,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     def connection_made(self, transport):
         super(ClientCsyncProtocol, self).connection_made(transport);
 
+        self.loop.call_later(0.1, self.start)
+
+    def start(self):
         print("sending Client Hello...")
         message = packettype.Client_Hello + self.id.to_bytes(8, byteorder='big')
         sent = self.sendto(message)
@@ -41,6 +48,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         loop = asyncio.get_event_loop()
         loop.stop()
 
+    def signal(self, signame):
+        print("got signal %s: exit" % signame)
+        self.loop.stop()
+
 
 def run(args):
     loop = asyncio.get_event_loop()
@@ -53,10 +64,16 @@ def run(args):
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
 
+    if sys.platform != 'win32':
+        for signame in ('SIGINT', 'SIGTERM'):
+            loop.add_signal_handler(getattr(signal, signame),
+                functools.partial(protocol.signal, signame))
+
+    print("Event loop running forever, press Ctrl+C to interrupt.")
+    print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
+
     try:
         loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-
-    transport.close()
-    loop.close()
+    finally:
+        transport.close()
+        loop.close()
