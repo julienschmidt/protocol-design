@@ -1,0 +1,8 @@
+Error = b'\x00'
+Ack_Error = b'\x01'
+Client_Hello = b'\x10'
+Server_Hello = b'\x11'
+File_Upload = b'\x21'
+Ack_Upload = b'\x22'
+File_Delete = b'\x23'
+Ack_Delete = b'\x24'
