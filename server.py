@@ -1,62 +1,65 @@
+import asyncio
+
 from os import listdir
 from os.path import isfile, join
 
-from lib import sha256
-from lib import socket
 from lib import packettype
+from lib import sha256
+from lib.protocol import BaseCsyncProtocol
 
-def send(data, addr):
-    h = sha256.hash(data)
-    print(sha256.hex(h))
-    sent = sock.sendto(h + message, addr)
+
+class ServerCsyncProtocol(BaseCsyncProtocol):
+    def __init__(self, loop, path):
+        super(ServerCsyncProtocol, self).__init__();
+        self.loop = loop
+        self.path = path
+
+        print('storing in', self.path)
+
+        self.fileinfo = {}
+        # list dir
+        files = [f for f in listdir(self.path) if isfile(join(self.path, f))]
+        for file in files:
+            h = sha256.hashFile(file)
+            print(file, sha256.hex(h))
+            self.fileinfo[file] = h
+        print('\n')
+
+    def handle_client_hello(self, data, addr):
+        print('received Client_Hello from', addr)
+        if len(data) != 8:
+            print('invalid Client_Hello length', len(data))
+            return
+
+        print('clientID:', int.from_bytes(data, byteorder='big'))
+
+        # respond with Server_Hello
+        message = bytearray(packettype.Server_Hello)
+        for filename, h in self.fileinfo.items():
+            message.extend((len(filename)).to_bytes(2, byteorder='big'))
+            message.extend(filename.encode('utf8'))
+            message.extend(h)
+            print(len(filename), filename, sha256.hex(h))
+        sent = self.sendto(message, addr)
+        print('sent {} bytes back to {}'.format(sent, addr))
+
 
 def run(args):
+    loop = asyncio.get_event_loop()
+
     # bind to UDP socket
+    print("Starting UDP server")
     server_address = (args.host, args.port)
-    sock = socket.Socket()
-    print('storing in', args.path)
     print('starting up on {}:{}\n'.format(*server_address))
-    sock.bind(server_address)
+    listen = loop.create_datagram_endpoint(
+        lambda: ServerCsyncProtocol(loop, args.path),
+        local_addr=server_address)
+    transport, protocol = loop.run_until_complete(listen)
 
-    fileinfo = {}
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
 
-    # list dir
-    files = [f for f in listdir(args.path) if isfile(join(args.path, f))]
-    for file in files:
-        h = sha256.hashFile(file)
-        print(file, sha256.hex(h))
-        fileinfo[file] = h
-
-    print('\n')
-
-    # wait for messages
-    # TODO: make concurrent (use worker threads? asyncio?)
-    while True:
-        print('\nwaiting to receive message...')
-        valid, pt, data, address = sock.recv()
-        if not valid:
-            print("dropping invalid message")
-            continue
-
-        # TODO: use map 'switch'?
-        if pt == packettype.Client_Hello:
-            print('received Client_Hello from', address)
-            if len(data) != 8:
-                print('invalid Client_Hello length', len(data))
-                continue
-
-            print('clientID:', int.from_bytes(data, byteorder='big'))
-
-            # respond with Server_Hello
-            message = bytearray(packettype.Server_Hello)
-            for filename, h in fileinfo.items():
-                message.extend((len(filename)).to_bytes(2, byteorder='big'))
-                message.extend(filename.encode('utf8'))
-                message.extend(h)
-                print(len(filename), filename, sha256.hex(h))
-            sent = sock.sendto(message, address)
-            print('sent {} bytes back to {}'.format(sent, address))
-
-        else:
-            print('received unknown packet type from', address)
-            continue
+    transport.close()
+    loop.close()
