@@ -9,6 +9,7 @@ import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from lib import files
 from lib import packettype
 from lib import sha256
 from lib.protocol import BaseCsyncProtocol
@@ -23,25 +24,29 @@ class FileEventHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        self.loop.call_soon_threadsafe(self.protocol.upload_file, event.src_path)
+        self.loop.call_soon_threadsafe(self.protocol.upload_file,
+            event.src_path)
 
     def on_deleted(self, event):
         if event.is_directory:
             return
 
-        self.loop.call_soon_threadsafe(self.protocol.delete_file, event.src_path)
+        self.loop.call_soon_threadsafe(self.protocol.delete_file,
+            event.src_path)
 
     def on_modified(self, event):
         if event.is_directory:
             return
 
-        self.loop.call_soon_threadsafe(self.protocol.update_file, event.src_path)
+        self.loop.call_soon_threadsafe(self.protocol.update_file,
+            event.src_path)
 
     def on_moved(self, event):
         if event.is_directory:
             return
 
-        self.loop.call_soon_threadsafe(self.protocol.move_file, event.src_path, event.dest_path)
+        self.loop.call_soon_threadsafe(self.protocol.move_file,
+            event.src_path, event.dest_path)
 
 
 class ClientCsyncProtocol(BaseCsyncProtocol):
@@ -53,10 +58,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # generate client ID
         self.id = random.getrandbits(64)
         print("clientID:", self.id)
+        print('syncing path', self.path)
 
     def connection_made(self, transport):
         super(ClientCsyncProtocol, self).connection_made(transport);
-
         self.loop.call_later(0.1, self.start)
 
     def start(self):
@@ -64,18 +69,22 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         message = packettype.Client_Hello + self.id.to_bytes(8, byteorder='big')
         sent = self.sendto(message)
 
-        print("awaiting Server Hello...")
+        print("awaiting Server Hello...\n")
 
     def handle_server_hello(self, data, addr):
         print("received Server Hello:")
+        remote_files = {}
         while len(data) > 34:
             l = int.from_bytes(data[:2], byteorder='big')
             print("len", l)
             # TODO: verify data len
-            print("filename", data[2:2+l])
+            filename = data[2:2+l]
+            print("filename", filename)
             data = data[2+l:]
-            print("filehash", sha256.hex(data[:32]))
+            filehash = data[:32]
+            print("filehash", sha256.hex(filehash))
             data = data[32:]
+            remote_files[filename] = filehash
         # TODO: verify len(data) == 0
 
         # start file dir observer
@@ -83,6 +92,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.observer = Observer()
         self.observer.schedule(event_handler, self.path, recursive=False)
         self.observer.start()
+
 
     def upload_file(self, path):
         #sha256.hashFile(path)
@@ -102,13 +112,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     def connection_lost(self, exc):
         print("Socket closed, stop the event loop")
-        loop = asyncio.get_event_loop()
-        loop.stop()
-        if self.observer:
-            self.observer.stop()
+        self.stop()
 
     def signal(self, signame):
         print("got signal %s: exit" % signame)
+        self.stop()
+
+    def stop(self):
         self.loop.stop()
         if self.observer:
             self.observer.stop()

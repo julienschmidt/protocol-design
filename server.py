@@ -4,9 +4,7 @@ import os
 import signal
 import sys
 
-from os import listdir
-from os.path import isfile, join
-
+from lib import files
 from lib import packettype
 from lib import sha256
 from lib.protocol import BaseCsyncProtocol
@@ -18,12 +16,12 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         self.loop = loop
         self.path = path
 
-        print('storing in', self.path)
+        print('storing in', path)
 
         self.fileinfo = {}
         # list dir
-        files = [f for f in listdir(self.path) if isfile(join(self.path, f))]
-        for file in files:
+        local_files = files.list(path)
+        for file in local_files:
             h = sha256.hashFile(file)
             print(file, sha256.hex(h))
             self.fileinfo[file] = h
@@ -41,7 +39,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         message = bytearray(packettype.Server_Hello)
         for filename, h in self.fileinfo.items():
             message.extend((len(filename)).to_bytes(2, byteorder='big'))
-            message.extend(filename.encode('utf8'))
+            message.extend(filename)
             message.extend(h)
             print(len(filename), filename, sha256.hex(h))
         sent = self.sendto(message, addr)
