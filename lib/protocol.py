@@ -103,15 +103,12 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_ack_metadata(self, filehash, filename, upload_id, resume_at_byte=0, addr=None):
-        resume = bytes()
-        if resume_at_byte > 0:
-            resume = resume_at_byte.to_bytes(8, byteorder='big')
         data = (packettype.Ack_Metadata +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename +
                 upload_id.to_bytes(4, byteorder='big') +
-                resume)
+                (resume_at_byte.to_bytes(8, byteorder='big') if resume_at_byte > 0 else bytes()))
         return self.sendto(data, addr)
 
     def send_file_upload(self, upload_id, start_byte, payload, addr=None):

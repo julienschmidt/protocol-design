@@ -54,7 +54,22 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print(sha256.hex(filehash), filename_len, filename,
               size, oct(permissions), time.ctime(modified_at))
 
-        sent = self.send_ack_metadata(filehash, filename, 42, 1337, addr)
+        # TODO: handle size=0 (no upload necessary)
+
+        sent = self.send_ack_metadata(filehash, filename, 42, 0, addr)
+        print('sent {} bytes back to {}'.format(sent, addr))
+
+    def handle_file_upload(self, data, addr):
+        print('received File_Upload from', addr)
+
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        payload_start_byte = int.from_bytes(data[4:12], byteorder='big')
+        payload_len = int.from_bytes(data[12:14], byteorder='big')
+        payload = data[14:14+payload_len]
+
+        print(upload_id, payload_start_byte, payload_len, payload)
+
+        sent = self.send_ack_upload(upload_id, payload_start_byte+payload_len, addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def signal(self, signame):

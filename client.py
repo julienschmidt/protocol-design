@@ -129,6 +129,29 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                 self.loop.call_soon(self.update_file, filepath, filehash)
         print('\n')
 
+    def handle_ack_metadata(self, data, addr):
+        print('received Ack_Metadata from', addr)
+
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        data = data[34 + filename_len:]
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        resume_at_byte = int.from_bytes(
+            data[4:12], byteorder='big') if len(data) >= 12 else 0
+        print(sha256.hex(filehash), filename_len,
+              filename, upload_id, resume_at_byte)
+
+        sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
+        print('sent {} bytes'.format(sent))
+
+    def handle_ack_upload(self, data, addr):
+        print('received Ack_Upload from', addr)
+
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        acked_bytes = int.from_bytes(data[4:12], byteorder='big')
+        print(upload_id, acked_bytes)
+
     # file sync methods
     def upload_file(self, filepath, filehash=None):
         if filehash is None:
@@ -148,6 +171,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if filehash is None:
             filehash = sha256.hash_file(filepath)
         print("update", filepath, sha256.hex(filehash))
+        self.upload_file(filepath, filehash)
 
     def move_file(self, old_filepath, new_filepath, hash=None):
         # sha256.hash_file(new_filepath)
