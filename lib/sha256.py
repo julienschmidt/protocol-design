@@ -6,7 +6,7 @@ def hash(data):
     m.update(data)
     return m.digest()
 
-def hashFile(filepath):
+def hash_file(filepath):
     f = open(filepath, 'rb')
     m = hashlib.sha256()
     m.update(f.read())

@@ -21,8 +21,8 @@ class FileEventHandler(FileSystemEventHandler):
         self.path = path
         self.protocol = protocol
 
-    def relative_path(self, filepath):
-        return files.relative_path(filepath, self.path)
+    def relative_filepath(self, file):
+        return files.relative_path(file, self.path)
 
     def on_created(self, event):
         if event.is_directory:
@@ -121,29 +121,30 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # build file dir diff
         local_files = files.list(self.path)
         for file in local_files:
-            h = sha256.hashFile(file)
-            if file not in remote_files:
-                self.loop.call_soon(self.upload_file, file)
-            elif h != remote_files[file]:
-                self.loop.call_soon(self.update_file, file)
+            h = sha256.hash_file(self.path+file)
+            filepath = file.encode('utf8')
+            if filepath not in remote_files:
+                self.loop.call_soon(self.upload_file, filepath)
+            elif h != remote_files[filepath]:
+                self.loop.call_soon(self.update_file, filepath)
         print('\n')
 
 
     # file sync methods
-    def upload_file(self, path):
-        #sha256.hashFile(path)
-        print("upload", path)
+    def upload_file(self, filepath):
+        #sha256.hash_file(filepath)
+        print("upload", filepath)
 
-    def delete_file(self, path):
-        print("delete", path)
+    def delete_file(self, filepath):
+        print("delete", filepath)
 
-    def update_file(self, path):
-        #sha256.hashFile(path)
-        print("update", path)
+    def update_file(self, filepath):
+        #sha256.hash_file(filepath)
+        print("update", filepath)
 
-    def move_file(self, old_path, new_path):
-        #sha256.hashFile(new_path)
-        print("move", old_path, "to", new_path)
+    def move_file(self, old_filepath, new_filepath):
+        #sha256.hash_file(new_filepath)
+        print("move", old_filepath, "to", new_filepath)
 
 
 

@@ -22,9 +22,9 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # list dir
         local_files = files.list(path)
         for file in local_files:
-            h = sha256.hashFile(file)
+            h = sha256.hash_file(self.path+file)
             print(file, sha256.hex(h))
-            self.fileinfo[file] = h
+            self.fileinfo[file.encode('utf8')] = h
         print('\n')
 
     def handle_client_hello(self, data, addr):

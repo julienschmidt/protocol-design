@@ -23,6 +23,8 @@ def main():
 
     args = parser.parse_args()
 
+    args.path = os.path.normpath(args.path)+'/'
+
     if args.server:
         server.run(args)
     else:
