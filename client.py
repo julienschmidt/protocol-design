@@ -16,6 +16,7 @@ from lib.protocol import BaseCsyncProtocol
 
 
 class FileEventHandler(FileSystemEventHandler):
+
     def __init__(self, loop, path, protocol):
         self.loop = loop
         self.path = path
@@ -29,34 +30,35 @@ class FileEventHandler(FileSystemEventHandler):
             return
 
         self.loop.call_soon_threadsafe(self.protocol.upload_file,
-            self.relative_path(event.src_path))
+                                       self.relative_path(event.src_path))
 
     def on_deleted(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.delete_file,
-           self.relative_path(event.src_path))
+                                       self.relative_path(event.src_path))
 
     def on_modified(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.update_file,
-            self.relative_path(event.src_path))
+                                       self.relative_path(event.src_path))
 
     def on_moved(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.move_file,
-            self.relative_path(event.src_path),
-            self.relative_path(event.dest_path))
+                                       self.relative_path(event.src_path),
+                                       self.relative_path(event.dest_path))
 
 
 class ClientCsyncProtocol(BaseCsyncProtocol):
+
     def __init__(self, loop, path):
-        super(ClientCsyncProtocol, self).__init__();
+        super(ClientCsyncProtocol, self).__init__()
         self.loop = loop
         self.path = path
         self.observer = None
@@ -66,27 +68,25 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("clientID:", self.id)
         print('syncing path', self.path)
 
-
     # Socket State
     def connection_made(self, transport):
-        super(ClientCsyncProtocol, self).connection_made(transport);
+        super(ClientCsyncProtocol, self).connection_made(transport)
         self.loop.call_later(0.001, self.start)
 
     def connection_lost(self, exc):
         print("Socket closed, stop the event loop")
         self.stop()
 
-
     # UNIX Signals
     def signal(self, signame):
         print("got signal %s: exit" % signame)
         self.stop()
 
-
     # State
     def start(self):
         print("sending Client Hello...")
-        self.send_client_hello(self.id)
+        sent = self.send_client_hello(self.id)
+        print('sent {} bytes'.format(sent))
 
         print("awaiting Server Hello...\n")
 
@@ -103,9 +103,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             l = int.from_bytes(data[:2], byteorder='big')
             print("len", l)
             # TODO: verify data len
-            filename = data[2:2+l]
+            filename = data[2:2 + l]
             print("filename", filename)
-            data = data[2+l:]
+            data = data[2 + l:]
             filehash = data[:32]
             print("filehash", sha256.hex(filehash))
             data = data[32:]
@@ -121,7 +121,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # build file dir diff
         local_files = files.list(self.path)
         for file in local_files:
-            filehash = sha256.hash_file(self.path+file)
+            filehash = sha256.hash_file(self.path + file)
             filepath = file.encode('utf8')
             if filepath not in remote_files:
                 self.loop.call_soon(self.upload_file, filepath, filehash)
@@ -129,16 +129,17 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                 self.loop.call_soon(self.update_file, filepath, filehash)
         print('\n')
 
-
     # file sync methods
     def upload_file(self, filepath, filehash=None):
         if filehash is None:
             filehash = sha256.hash_file(filepath)
         print("upload", filepath, sha256.hex(filehash))
 
+        statinfo = os.stat(self.path + filepath.decode('utf8'))
+
         # send file metadata
-
-
+        sent = self.send_file_metadata(filehash, filepath, statinfo)
+        print('sent {} bytes'.format(sent))
 
     def delete_file(self, filepath, hash=None):
         print("delete", filepath)
@@ -149,9 +150,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("update", filepath, sha256.hex(filehash))
 
     def move_file(self, old_filepath, new_filepath, hash=None):
-        #sha256.hash_file(new_filepath)
+        # sha256.hash_file(new_filepath)
         print("move", old_filepath, "to", new_filepath)
-
 
 
 def run(args):
@@ -168,7 +168,7 @@ def run(args):
     if sys.platform != 'win32':
         for signame in ('SIGINT', 'SIGTERM'):
             loop.add_signal_handler(getattr(signal, signame),
-                functools.partial(protocol.signal, signame))
+                                    functools.partial(protocol.signal, signame))
 
     print("Event loop running forever, press Ctrl+C to interrupt.")
     print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())

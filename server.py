@@ -3,6 +3,7 @@ import functools
 import os
 import signal
 import sys
+import time
 
 from lib import files
 from lib import packettype
@@ -11,8 +12,9 @@ from lib.protocol import BaseCsyncProtocol
 
 
 class ServerCsyncProtocol(BaseCsyncProtocol):
+
     def __init__(self, loop, path):
-        super(ServerCsyncProtocol, self).__init__();
+        super(ServerCsyncProtocol, self).__init__()
         self.loop = loop
         self.path = path
 
@@ -22,9 +24,9 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # list dir
         local_files = files.list(path)
         for file in local_files:
-            h = sha256.hash_file(self.path+file)
-            print(file, sha256.hex(h))
-            self.fileinfo[file.encode('utf8')] = h
+            filehash = sha256.hash_file(self.path + file)
+            print(file, sha256.hex(filehash))
+            self.fileinfo[file.encode('utf8')] = filehash
         print('\n')
 
     def handle_client_hello(self, data, addr):
@@ -37,6 +39,22 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         # respond with Server_Hello
         sent = self.send_server_hello(self.fileinfo, addr)
+        print('sent {} bytes back to {}'.format(sent, addr))
+
+    def handle_file_metadata(self, data, addr):
+        print('received File_Metadata from', addr)
+
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        data = data[34 + filename_len:]
+        size = int.from_bytes(data[:8], byteorder='big')
+        permissions = int.from_bytes(data[8:10], byteorder='big')
+        modified_at = int.from_bytes(data[10:14], byteorder='big')
+        print(sha256.hex(filehash), filename_len, filename,
+              size, oct(permissions), time.ctime(modified_at))
+
+        sent = self.send_ack_metadata(filehash, filename, 42, 1337, addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def signal(self, signame):
@@ -59,7 +77,7 @@ def run(args):
     if sys.platform != 'win32':
         for signame in ('SIGINT', 'SIGTERM'):
             loop.add_signal_handler(getattr(signal, signame),
-                functools.partial(protocol.signal, signame))
+                                    functools.partial(protocol.signal, signame))
 
     print("Event loop running forever, press Ctrl+C to interrupt.")
     print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
