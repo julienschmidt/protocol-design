@@ -93,6 +93,15 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.observer.schedule(event_handler, self.path, recursive=False)
         self.observer.start()
 
+        # build file dir diff
+        local_files = files.list(self.path)
+        for file in local_files:
+            h = sha256.hashFile(file)
+            if file not in remote_files:
+                self.loop.call_soon(self.upload_file, file)
+            elif h != remote_files[file]:
+                self.loop.call_soon(self.update_file, file)
+        print('\n')
 
     def upload_file(self, path):
         #sha256.hashFile(path)
