@@ -36,13 +36,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('clientID:', int.from_bytes(data, byteorder='big'))
 
         # respond with Server_Hello
-        message = bytearray(packettype.Server_Hello)
-        for filename, h in self.fileinfo.items():
-            message.extend((len(filename)).to_bytes(2, byteorder='big'))
-            message.extend(filename)
-            message.extend(h)
-            print(len(filename), filename, sha256.hex(h))
-        sent = self.sendto(message, addr)
+        sent = self.send_server_hello(self.fileinfo, addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def signal(self, signame):

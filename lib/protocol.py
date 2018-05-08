@@ -76,6 +76,20 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def handle_invalid_packet(self, data, addr):
         print('dropping invalid packet from {}'.format(addr))
 
+
+    def send_client_hello(self, client_id, addr=None):
+        data = packettype.Client_Hello + client_id.to_bytes(8, byteorder='big')
+        return self.sendto(data, addr)
+
+    def send_server_hello(self, fileinfos, addr=None):
+        data = bytearray(packettype.Server_Hello)
+        for filename, filehash in fileinfos.items():
+            data.extend((len(filename)).to_bytes(2, byteorder='big'))
+            data.extend(filename)
+            data.extend(filehash)
+            print(len(filename), filename, sha256.hex(filehash))
+        return self.sendto(data, addr)
+
     # first byte must be the packet type
     def sendto(self, data, addr=None):
         # add packet hash

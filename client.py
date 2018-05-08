@@ -59,6 +59,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         super(ClientCsyncProtocol, self).__init__();
         self.loop = loop
         self.path = path
+        self.observer = None
 
         # generate client ID
         self.id = random.getrandbits(64)
@@ -69,7 +70,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     # Socket State
     def connection_made(self, transport):
         super(ClientCsyncProtocol, self).connection_made(transport);
-        self.loop.call_later(0.1, self.start)
+        self.loop.call_later(0.001, self.start)
 
     def connection_lost(self, exc):
         print("Socket closed, stop the event loop")
@@ -85,8 +86,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     # State
     def start(self):
         print("sending Client Hello...")
-        message = packettype.Client_Hello + self.id.to_bytes(8, byteorder='big')
-        sent = self.sendto(message)
+        self.send_client_hello(self.id)
 
         print("awaiting Server Hello...\n")
 
@@ -121,28 +121,34 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # build file dir diff
         local_files = files.list(self.path)
         for file in local_files:
-            h = sha256.hash_file(self.path+file)
+            filehash = sha256.hash_file(self.path+file)
             filepath = file.encode('utf8')
             if filepath not in remote_files:
-                self.loop.call_soon(self.upload_file, filepath)
-            elif h != remote_files[filepath]:
-                self.loop.call_soon(self.update_file, filepath)
+                self.loop.call_soon(self.upload_file, filepath, filehash)
+            elif filehash != remote_files[filepath]:
+                self.loop.call_soon(self.update_file, filepath, filehash)
         print('\n')
 
 
     # file sync methods
-    def upload_file(self, filepath):
-        #sha256.hash_file(filepath)
-        print("upload", filepath)
+    def upload_file(self, filepath, filehash=None):
+        if filehash is None:
+            filehash = sha256.hash_file(filepath)
+        print("upload", filepath, sha256.hex(filehash))
 
-    def delete_file(self, filepath):
+        # send file metadata
+
+
+
+    def delete_file(self, filepath, hash=None):
         print("delete", filepath)
 
-    def update_file(self, filepath):
-        #sha256.hash_file(filepath)
-        print("update", filepath)
+    def update_file(self, filepath, hash=None):
+        if filehash is None:
+            filehash = sha256.hash_file(filepath)
+        print("update", filepath, sha256.hex(filehash))
 
-    def move_file(self, old_filepath, new_filepath):
+    def move_file(self, old_filepath, new_filepath, hash=None):
         #sha256.hash_file(new_filepath)
         print("move", old_filepath, "to", new_filepath)
 
