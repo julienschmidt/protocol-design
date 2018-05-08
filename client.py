@@ -16,37 +16,42 @@ from lib.protocol import BaseCsyncProtocol
 
 
 class FileEventHandler(FileSystemEventHandler):
-    def __init__(self, loop, protocol):
+    def __init__(self, loop, path, protocol):
         self.loop = loop
+        self.path = path
         self.protocol = protocol
+
+    def relative_path(self, filepath):
+        return files.relative_path(filepath, self.path)
 
     def on_created(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.upload_file,
-            event.src_path)
+            self.relative_path(event.src_path))
 
     def on_deleted(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.delete_file,
-            event.src_path)
+           self.relative_path(event.src_path))
 
     def on_modified(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.update_file,
-            event.src_path)
+            self.relative_path(event.src_path))
 
     def on_moved(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.move_file,
-            event.src_path, event.dest_path)
+            self.relative_path(event.src_path),
+            self.relative_path(event.dest_path))
 
 
 class ClientCsyncProtocol(BaseCsyncProtocol):
@@ -60,10 +65,24 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("clientID:", self.id)
         print('syncing path', self.path)
 
+
+    # Socket State
     def connection_made(self, transport):
         super(ClientCsyncProtocol, self).connection_made(transport);
         self.loop.call_later(0.1, self.start)
 
+    def connection_lost(self, exc):
+        print("Socket closed, stop the event loop")
+        self.stop()
+
+
+    # UNIX Signals
+    def signal(self, signame):
+        print("got signal %s: exit" % signame)
+        self.stop()
+
+
+    # State
     def start(self):
         print("sending Client Hello...")
         message = packettype.Client_Hello + self.id.to_bytes(8, byteorder='big')
@@ -71,6 +90,12 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         print("awaiting Server Hello...\n")
 
+    def stop(self):
+        self.loop.stop()
+        if self.observer:
+            self.observer.stop()
+
+    # Packet Handlers
     def handle_server_hello(self, data, addr):
         print("received Server Hello:")
         remote_files = {}
@@ -88,7 +113,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # TODO: verify len(data) == 0
 
         # start file dir observer
-        event_handler = FileEventHandler(self.loop, self)
+        event_handler = FileEventHandler(self.loop, self.path, self)
         self.observer = Observer()
         self.observer.schedule(event_handler, self.path, recursive=False)
         self.observer.start()
@@ -103,6 +128,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                 self.loop.call_soon(self.update_file, file)
         print('\n')
 
+
+    # file sync methods
     def upload_file(self, path):
         #sha256.hashFile(path)
         print("upload", path)
@@ -118,19 +145,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         #sha256.hashFile(new_path)
         print("move", old_path, "to", new_path)
 
-
-    def connection_lost(self, exc):
-        print("Socket closed, stop the event loop")
-        self.stop()
-
-    def signal(self, signame):
-        print("got signal %s: exit" % signame)
-        self.stop()
-
-    def stop(self):
-        self.loop.stop()
-        if self.observer:
-            self.observer.stop()
 
 
 def run(args):
