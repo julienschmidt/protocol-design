@@ -23,6 +23,9 @@ def main():
 
     args = parser.parse_args()
 
+    # normalize path
+    if args.path[0] != '/' and args.path[0] != '.':
+        args.path = os.getcwd()+'/'+args.path
     args.path = os.path.normpath(args.path)+'/'
 
     if args.server:
