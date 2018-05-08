@@ -33,6 +33,8 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             packettype.Ack_Error: self.handle_ack_error,
             packettype.Client_Hello: self.handle_client_hello,
             packettype.Server_Hello: self.handle_server_hello,
+            packettype.File_Metadata: self.handle_file_metadata,
+            packettype.Ack_Metadata: self.handle_ack_metadata,
             packettype.File_Upload: self.handle_file_upload,
             packettype.Ack_Upload: self.handle_ack_upload,
             packettype.File_Delete: self.handle_file_delete,
@@ -51,6 +53,12 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return
 
     def handle_server_hello(self, data, addr):
+        return
+
+    def handle_file_metadata(self, data, addr):
+        return
+
+    def handle_ack_metadata(self, data, addr):
         return
 
     def handle_file_upload(self, data, addr):
