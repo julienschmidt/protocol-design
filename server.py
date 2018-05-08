@@ -30,7 +30,6 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('\n')
 
     def handle_client_hello(self, data, addr):
-        print('received Client_Hello from', addr)
         if len(data) != 8:
             print('invalid Client_Hello length', len(data))
             return
@@ -42,8 +41,6 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def handle_file_metadata(self, data, addr):
-        print('received File_Metadata from', addr)
-
         filehash = data[:32]
         filename_len = int.from_bytes(data[32:34], byteorder='big')
         filename = data[34:34 + filename_len]
@@ -60,8 +57,6 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def handle_file_upload(self, data, addr):
-        print('received File_Upload from', addr)
-
         upload_id = int.from_bytes(data[:4], byteorder='big')
         payload_start_byte = int.from_bytes(data[4:12], byteorder='big')
         payload_len = int.from_bytes(data[12:14], byteorder='big')

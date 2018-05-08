@@ -47,33 +47,43 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         func(data, addr)
 
     def handle_error(self, data, addr):
+        print('received Error from', addr)
         return
 
     def handle_ack_error(self, data, addr):
+        print('received Ack_Error from', addr)
         return
 
     def handle_client_hello(self, data, addr):
+        print('received Client_Hello from', addr)
         return
 
     def handle_server_hello(self, data, addr):
+        print('received Server_Hello from', addr)
         return
 
     def handle_file_metadata(self, data, addr):
+        print('received File_Metadata from', addr)
         return
 
     def handle_ack_metadata(self, data, addr):
+        print('received Ack_Metadata from', addr)
         return
 
     def handle_file_upload(self, data, addr):
+        print('received File_Upload from', addr)
         return
 
     def handle_ack_upload(self, data, addr):
+        print('received Ack_Upload from', addr)
         return
 
     def handle_file_delete(self, data, addr):
+        print('received File_Delete from', addr)
         return
 
     def handle_ack_delete(self, data, addr):
+        print('received Ack_Delete from', addr)
         return
 
     def handle_invalid_packet(self, data, addr):
