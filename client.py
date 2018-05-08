@@ -97,6 +97,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     # Packet Handlers
     def handle_server_hello(self, data, addr):
+        print("received Server Hello:")
         remote_files = {}
         while len(data) > 34:
             l = int.from_bytes(data[:2], byteorder='big')
@@ -129,6 +130,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print('\n')
 
     def handle_ack_metadata(self, data, addr):
+        print('received Ack_Metadata from', addr)
+
         filehash = data[:32]
         filename_len = int.from_bytes(data[32:34], byteorder='big')
         filename = data[34:34 + filename_len]
@@ -143,6 +146,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print('sent {} bytes'.format(sent))
 
     def handle_ack_upload(self, data, addr):
+        print('received Ack_Upload from', addr)
+
         upload_id = int.from_bytes(data[:4], byteorder='big')
         acked_bytes = int.from_bytes(data[4:12], byteorder='big')
         print(upload_id, acked_bytes)
