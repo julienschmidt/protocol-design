@@ -71,6 +71,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     # Socket State
     def connection_made(self, transport):
         super(ClientCsyncProtocol, self).connection_made(transport)
+
+        # workaround to make start() execute after
+        # loop.run_until_complete(connect) returned
         self.loop.call_later(0.001, self.start)
 
     def connection_lost(self, exc):
@@ -166,6 +169,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     def delete_file(self, filepath, filehash=None):
         print("delete", filepath)
+        # TODO: get cached filehash of deleted file and send File_Delete packet
 
     def update_file(self, filepath, filehash=None):
         if filehash is None:
@@ -173,7 +177,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("update", filepath, sha256.hex(filehash))
         self.upload_file(filepath, filehash)
 
-    def move_file(self, old_filepath, new_filepath, hash=None):
+    def move_file(self, old_filepath, new_filepath, filehash=None):
         # sha256.hash_file(new_filepath)
         print("move", old_filepath, "to", new_filepath)
         # TODO: specify file move / rename packet
@@ -182,14 +186,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 def run(args):
     loop = asyncio.get_event_loop()
 
-    # create UDP socket
+    # create UDP socket and start event loop listening to it
     server_address = (args.host, args.port)
     print(server_address)
     connect = loop.create_datagram_endpoint(
         lambda: ClientCsyncProtocol(loop, args.path),
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
-
 
     for signame in ('SIGINT', 'SIGTERM'):
         loop.add_signal_handler(getattr(signal, signame),
