@@ -31,11 +31,11 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
     def handle_client_hello(self, data, addr):
         print('received Client_Hello from', addr)
-        if len(data) != 8:
-            print('invalid Client_Hello length', len(data))
+        valid, client_id = self.unpack_client_hello(data)
+        if not valid:
             return
 
-        print('clientID:', int.from_bytes(data, byteorder='big'))
+        print('clientID:', client_id)
 
         # respond with Server_Hello
         sent = self.send_server_hello(self.fileinfo, addr)
@@ -44,15 +44,12 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
     def handle_file_metadata(self, data, addr):
         print('received File_Metadata from', addr)
 
-        filehash = data[:32]
-        filename_len = int.from_bytes(data[32:34], byteorder='big')
-        filename = data[34:34 + filename_len]
-        data = data[34 + filename_len:]
-        size = int.from_bytes(data[:8], byteorder='big')
-        permissions = int.from_bytes(data[8:10], byteorder='big')
-        modified_at = int.from_bytes(data[10:14], byteorder='big')
-        print(sha256.hex(filehash), filename_len, filename,
-              size, oct(permissions), time.ctime(modified_at))
+        valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(
+            data)
+        if not valid:
+            return
+        print(sha256.hex(filehash), filename, size,
+              oct(permissions), time.ctime(modified_at))
 
         # TODO: handle size=0 (no upload necessary)
 
@@ -62,14 +59,14 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
     def handle_file_upload(self, data, addr):
         print('received File_Upload from', addr)
 
-        upload_id = int.from_bytes(data[:4], byteorder='big')
-        payload_start_byte = int.from_bytes(data[4:12], byteorder='big')
-        payload_len = int.from_bytes(data[12:14], byteorder='big')
-        payload = data[14:14+payload_len]
+        valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(data)
+        if not valid:
+            return
 
-        print(upload_id, payload_start_byte, payload_len, payload)
+        print(upload_id, payload_start_byte, payload)
 
-        sent = self.send_ack_upload(upload_id, payload_start_byte+payload_len, addr)
+        sent = self.send_ack_upload(
+            upload_id, payload_start_byte + len(payload), addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def signal(self, signame):

@@ -159,3 +159,56 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         #print("Sending:", len(data), data)
         self.transport.sendto(data, addr)
         return len(data)
+
+    def unpack_client_hello(self, data):
+        if len(data) != 8:
+            return (False, 0)
+        return (True, int.from_bytes(data, byteorder='big'))
+
+    def unpack_server_hello(self, data):
+        remote_files = {}
+        while len(data) > 34:
+            l = int.from_bytes(data[:2], byteorder='big')
+            print("len", l)
+            # TODO: verify data len
+            filename = data[2:2 + l]
+            print("filename", filename)
+            data = data[2 + l:]
+            filehash = data[:32]
+            print("filehash", sha256.hex(filehash))
+            data = data[32:]
+            remote_files[filename] = filehash
+        # TODO: verify len(data) == 0
+        return (True, remote_files)
+
+    def unpack_file_metadata(self, data):
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        data = data[34 + filename_len:]
+        size = int.from_bytes(data[:8], byteorder='big')
+        permissions = int.from_bytes(data[8:10], byteorder='big')
+        modified_at = int.from_bytes(data[10:14], byteorder='big')
+        return (True, filehash, filename, size, permissions, modified_at)
+
+    def unpack_ack_metadata(self, data):
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        data = data[34 + filename_len:]
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        resume_at_byte = int.from_bytes(
+            data[4:12], byteorder='big') if len(data) >= 12 else 0
+        return (True, filehash, filename, upload_id, resume_at_byte)
+
+    def unpack_file_upload(self, data):
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        payload_start_byte = int.from_bytes(data[4:12], byteorder='big')
+        payload_len = int.from_bytes(data[12:14], byteorder='big')
+        payload = data[14:14 + payload_len]
+        return (True, upload_id, payload_start_byte, payload)
+
+    def unpack_ack_upload(self, data):
+        upload_id = int.from_bytes(data[:4], byteorder='big')
+        acked_bytes = int.from_bytes(data[4:12], byteorder='big')
+        return (True, upload_id, acked_bytes)

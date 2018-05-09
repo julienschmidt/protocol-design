@@ -101,19 +101,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     # Packet Handlers
     def handle_server_hello(self, data, addr):
         print("received Server Hello:")
-        remote_files = {}
-        while len(data) > 34:
-            l = int.from_bytes(data[:2], byteorder='big')
-            print("len", l)
-            # TODO: verify data len
-            filename = data[2:2 + l]
-            print("filename", filename)
-            data = data[2 + l:]
-            filehash = data[:32]
-            print("filehash", sha256.hex(filehash))
-            data = data[32:]
-            remote_files[filename] = filehash
-        # TODO: verify len(data) == 0
+        valid, remote_files = self.unpack_server_hello(data)
+        if not valid:
+            return
 
         # start file dir observer
         event_handler = FileEventHandler(self.loop, self.path, self)
@@ -135,15 +125,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     def handle_ack_metadata(self, data, addr):
         print('received Ack_Metadata from', addr)
 
-        filehash = data[:32]
-        filename_len = int.from_bytes(data[32:34], byteorder='big')
-        filename = data[34:34 + filename_len]
-        data = data[34 + filename_len:]
-        upload_id = int.from_bytes(data[:4], byteorder='big')
-        resume_at_byte = int.from_bytes(
-            data[4:12], byteorder='big') if len(data) >= 12 else 0
-        print(sha256.hex(filehash), filename_len,
-              filename, upload_id, resume_at_byte)
+        valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
+            data)
+        if not valid:
+            return
+        print(sha256.hex(filehash), filename, upload_id, resume_at_byte)
 
         sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
         print('sent {} bytes'.format(sent))
@@ -151,8 +137,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
     def handle_ack_upload(self, data, addr):
         print('received Ack_Upload from', addr)
 
-        upload_id = int.from_bytes(data[:4], byteorder='big')
-        acked_bytes = int.from_bytes(data[4:12], byteorder='big')
+        valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
+        if not valid:
+            return
         print(upload_id, acked_bytes)
 
     # file sync methods
