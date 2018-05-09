@@ -164,10 +164,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         sent = self.send_file_metadata(filehash, filepath, statinfo)
         print('sent {} bytes'.format(sent))
 
-    def delete_file(self, filepath, hash=None):
+    def delete_file(self, filepath, filehash=None):
         print("delete", filepath)
 
-    def update_file(self, filepath, hash=None):
+    def update_file(self, filepath, filehash=None):
         if filehash is None:
             filehash = sha256.hash_file(filepath)
         print("update", filepath, sha256.hex(filehash))
