@@ -11,6 +11,10 @@ import server
 # Server: csync [-s] [-p <port>]
 
 def main():
+    if sys.platform == 'win32':
+        print("Windows is currently not supported.")
+        os.exit(1)
+
     # parse flags
     parser = argparse.ArgumentParser(description='Cloud Sync', conflict_handler='resolve')
 

@@ -89,10 +89,9 @@ def run(args):
         local_addr=server_address)
     transport, protocol = loop.run_until_complete(listen)
 
-    if sys.platform != 'win32':
-        for signame in ('SIGINT', 'SIGTERM'):
-            loop.add_signal_handler(getattr(signal, signame),
-                                    functools.partial(protocol.signal, signame))
+    for signame in ('SIGINT', 'SIGTERM'):
+        loop.add_signal_handler(getattr(signal, signame),
+                                functools.partial(protocol.signal, signame))
 
     print("Event loop running forever, press Ctrl+C to interrupt.")
     print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
