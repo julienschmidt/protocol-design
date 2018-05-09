@@ -7,17 +7,17 @@
 ### 3rd-party Packages:
 `pip3 install watchdog`
 
-## Interface:
+## Usage:
 
 See `csync --help` for all options.
 
-###Client: 
+### Client: 
 `csync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]`  
 
-###Server: 
-`csync [-s] [-p <port>]`
+### Server: 
+`csync [-s] [-p <port>] [-f <directory-path>]`
 
-###Arguments:
+### Arguments:
 `-s` Server mode: accept incoming connections from any host  
 `-p` Specify the port number (default: `5000`)  
 `-f` Upload all files in that directory to the server  
