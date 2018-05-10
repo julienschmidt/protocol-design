@@ -212,3 +212,15 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         upload_id = int.from_bytes(data[:4], byteorder='big')
         acked_bytes = int.from_bytes(data[4:12], byteorder='big')
         return (True, upload_id, acked_bytes)
+
+    def unpack_file_delete(self, data):
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        return (True, filehash, filename)
+
+    def unpack_ack_delete(self, data):
+        filehash = data[:32]
+        filename_len = int.from_bytes(data[32:34], byteorder='big')
+        filename = data[34:34 + filename_len]
+        return (True, filehash, filename)
