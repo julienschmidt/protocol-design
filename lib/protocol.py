@@ -1,8 +1,25 @@
 import asyncio
 import stat
 
-from . import packettype
+from enum import Enum, unique
+
 from . import sha256
+
+
+@unique
+class PacketType(bytes, Enum):
+    Error = b'\x00'
+    Ack_Error = b'\x01'
+    Client_Hello = b'\x10'
+    Server_Hello = b'\x11'
+    File_Metadata = b'\x20'
+    Ack_Metadata = b'\x21'
+    File_Upload = b'\x22'
+    Ack_Upload = b'\x23'
+    File_Delete = b'\x24'
+    Ack_Delete = b'\x25'
+    File_Rename = b'\x26'
+    Ack_Rename = b'\x27'
 
 
 class BaseCsyncProtocol(asyncio.DatagramProtocol):
@@ -32,18 +49,18 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
     def handle_valid_packet(self, ptype, data, addr):
         handle_methods = {
-            packettype.Error: self.handle_error,
-            packettype.Ack_Error: self.handle_ack_error,
-            packettype.Client_Hello: self.handle_client_hello,
-            packettype.Server_Hello: self.handle_server_hello,
-            packettype.File_Metadata: self.handle_file_metadata,
-            packettype.Ack_Metadata: self.handle_ack_metadata,
-            packettype.File_Upload: self.handle_file_upload,
-            packettype.Ack_Upload: self.handle_ack_upload,
-            packettype.File_Delete: self.handle_file_delete,
-            packettype.Ack_Delete: self.handle_ack_delete,
-            packettype.File_Rename: self.handle_file_rename,
-            packettype.Ack_Rename: self.handle_ack_rename,
+            PacketType.Error: self.handle_error,
+            PacketType.Ack_Error: self.handle_ack_error,
+            PacketType.Client_Hello: self.handle_client_hello,
+            PacketType.Server_Hello: self.handle_server_hello,
+            PacketType.File_Metadata: self.handle_file_metadata,
+            PacketType.Ack_Metadata: self.handle_ack_metadata,
+            PacketType.File_Upload: self.handle_file_upload,
+            PacketType.Ack_Upload: self.handle_ack_upload,
+            PacketType.File_Delete: self.handle_file_delete,
+            PacketType.Ack_Delete: self.handle_ack_delete,
+            PacketType.File_Rename: self.handle_file_rename,
+            PacketType.Ack_Rename: self.handle_ack_rename,
         }
         func = handle_methods.get(ptype, self.handle_invalid_packet)
         func(data, addr)
@@ -100,11 +117,11 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         print('dropping invalid packet from {}'.format(addr))
 
     def send_client_hello(self, client_id, addr=None):
-        data = packettype.Client_Hello + client_id.to_bytes(8, byteorder='big')
+        data = PacketType.Client_Hello + client_id.to_bytes(8, byteorder='big')
         return self.sendto(data, addr)
 
     def send_server_hello(self, fileinfos, addr=None):
-        data = bytearray(packettype.Server_Hello)
+        data = bytearray(PacketType.Server_Hello)
         for filename, filehash in fileinfos.items():
             data.extend((len(filename)).to_bytes(2, byteorder='big'))
             data.extend(filename)
@@ -113,7 +130,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_file_metadata(self, filehash, filename, statinfo, addr=None):
-        data = (packettype.File_Metadata +
+        data = (PacketType.File_Metadata +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename +
@@ -123,7 +140,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_ack_metadata(self, filehash, filename, upload_id, resume_at_byte=0, addr=None):
-        data = (packettype.Ack_Metadata +
+        data = (PacketType.Ack_Metadata +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename +
@@ -132,7 +149,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_file_upload(self, upload_id, start_byte, payload, addr=None):
-        data = (packettype.File_Upload +
+        data = (PacketType.File_Upload +
                 upload_id.to_bytes(4, byteorder='big') +
                 start_byte.to_bytes(8, byteorder='big') +
                 (len(payload)).to_bytes(2, byteorder='big') +
@@ -140,27 +157,27 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_ack_upload(self, upload_id, acked_bytes, addr=None):
-        data = (packettype.Ack_Upload +
+        data = (PacketType.Ack_Upload +
                 upload_id.to_bytes(4, byteorder='big') +
                 acked_bytes.to_bytes(8, byteorder='big'))
         return self.sendto(data, addr)
 
     def send_file_delete(self, filehash, filename, addr=None):
-        data = (packettype.File_Delete +
+        data = (PacketType.File_Delete +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename)
         return self.sendto(data, addr)
 
     def send_ack_delete(self, filehash, filename, addr=None):
-        data = (packettype.Ack_Delete +
+        data = (PacketType.Ack_Delete +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename)
         return self.sendto(data, addr)
 
     def send_file_delete(self, filehash, old_filename, new_filename, addr=None):
-        data = (packettype.File_Rename +
+        data = (PacketType.File_Rename +
                 filehash +
                 (len(old_filename)).to_bytes(2, byteorder='big') +
                 old_filename +
@@ -169,7 +186,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_ack_delete(self, filehash, old_filename, new_filename, addr=None):
-        data = (packettype.Ack_Rename +
+        data = (PacketType.Ack_Rename +
                 filehash +
                 (len(old_filename)).to_bytes(2, byteorder='big') +
                 old_filename +

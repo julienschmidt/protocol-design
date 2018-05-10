@@ -6,7 +6,6 @@ import sys
 import time
 
 from lib import files
-from lib import packettype
 from lib import sha256
 from lib.protocol import BaseCsyncProtocol
 
