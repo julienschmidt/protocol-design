@@ -21,6 +21,11 @@ class PacketType(bytes, Enum):
     File_Rename = b'\x26'
     Ack_Rename = b'\x27'
 
+@unique
+class ErrorType(Enum):
+    Hash_Error = b'\x00'
+    Out_Of_Memory = b'\x01'
+    Conflict = b'\x02'
 
 class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
