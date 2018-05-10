@@ -1,10 +1,12 @@
+"""
+Client implementation
+"""
+
 import asyncio
 import functools
 import os
 import random
 import signal
-import sys
-import time
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -15,6 +17,9 @@ from lib.protocol import BaseCsyncProtocol
 
 
 class FileEventHandler(FileSystemEventHandler):
+    """
+    File Event Handler
+    """
 
     def __init__(self, loop, path, protocol):
         self.loop = loop
@@ -22,6 +27,9 @@ class FileEventHandler(FileSystemEventHandler):
         self.protocol = protocol
 
     def relative_filepath(self, file):
+        """
+        Return a filepath relative to the file dir for the given file.
+        """
         return files.relative_filepath(file, self.path)
 
     def on_created(self, event):
@@ -55,21 +63,24 @@ class FileEventHandler(FileSystemEventHandler):
 
 
 class ClientCsyncProtocol(BaseCsyncProtocol):
+    """
+    Client implementation of the csync protocol
+    """
 
     def __init__(self, loop, path):
-        super(ClientCsyncProtocol, self).__init__()
+        super().__init__()
         self.loop = loop
         self.path = path
         self.observer = None
 
         # generate client ID
-        self.id = random.getrandbits(64)
-        print("clientID:", self.id)
+        self.client_id = random.getrandbits(64)
+        print("clientID:", self.client_id)
         print('syncing path', self.path)
 
     # Socket State
     def connection_made(self, transport):
-        super(ClientCsyncProtocol, self).connection_made(transport)
+        super().connection_made(transport)
 
         # workaround to make start() execute after
         # loop.run_until_complete(connect) returned
@@ -81,18 +92,27 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     # UNIX Signals
     def signal(self, signame):
+        """
+        UNIX signal handler.
+        """
         print("got signal %s: exit" % signame)
         self.stop()
 
     # State
     def start(self):
+        """
+        Start client protocol by sending a Client_Hello.
+        """
         print("sending Client Hello...")
-        sent = self.send_client_hello(self.id)
+        sent = self.send_client_hello(self.client_id)
         print('sent {} bytes'.format(sent))
 
         print("awaiting Server Hello...\n")
 
     def stop(self):
+        """
+        Stop the client.
+        """
         self.loop.stop()
         if self.observer:
             self.observer.stop()
@@ -133,7 +153,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
         print('sent {} bytes'.format(sent))
 
-
     def handle_ack_upload(self, data, addr):
         print('received Ack_Upload from', addr)
 
@@ -144,8 +163,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     # file sync methods
     def upload_file(self, filepath, filehash=None):
+        """
+        Upload the given file to server.
+        """
         if filehash is None:
-            filehash = sha256.hash_file(filepath)
+            filehash = sha256.hash_file(self.path + filepath)
         print("upload", filepath, sha256.hex(filehash))
 
         statinfo = os.stat(self.path + filepath.decode('utf8'))
@@ -154,23 +176,37 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         sent = self.send_file_metadata(filehash, filepath, statinfo)
         print('sent {} bytes'.format(sent))
 
+        # self.loop.call_later(1, )
+
     def delete_file(self, filepath, filehash=None):
+        """
+        Delete the given file from the server.
+        """
         print("delete", filepath)
         # TODO: get cached filehash of deleted file and send File_Delete packet
 
     def update_file(self, filepath, filehash=None):
+        """
+        Update the given file on the server by uploading the new content.
+        """
         if filehash is None:
-            filehash = sha256.hash_file(filepath)
+            filehash = sha256.hash_file(self.path + filepath)
         print("update", filepath, sha256.hex(filehash))
         self.upload_file(filepath, filehash)
 
     def move_file(self, old_filepath, new_filepath, filehash=None):
+        """
+        Move a file on the server by changing its path.
+        """
         # sha256.hash_file(new_filepath)
         print("move", old_filepath, "to", new_filepath)
         # TODO: specify file move / rename packet
 
 
 def run(args):
+    """
+    Start running as a client.
+    """
     loop = asyncio.get_event_loop()
 
     # create UDP socket and start event loop listening to it

@@ -1,8 +1,11 @@
+"""
+Server implementation
+"""
+
 import asyncio
 import functools
 import os
 import signal
-import sys
 import time
 
 from lib import files
@@ -11,15 +14,18 @@ from lib.protocol import BaseCsyncProtocol
 
 
 class ServerCsyncProtocol(BaseCsyncProtocol):
+    """
+    Server implementation of the csync protocol
+    """
 
     def __init__(self, loop, path):
-        super(ServerCsyncProtocol, self).__init__()
+        super().__init__()
         self.loop = loop
         self.path = path
 
         print('storing in', path)
 
-        self.fileinfo = {}
+        self.fileinfo = dict()
         # list dir
         local_files = files.list(path)
         for file in local_files:
@@ -32,7 +38,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('received Client_Hello from', addr)
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
-            print('received Client_Hallo was not in a correct form, not returning a Server_Hallo')
+            print(
+                'received Client_Hello was not in a correct form, not returning a Server_Hello')
             return
 
         print('client wants to connect with clientID:', client_id)
@@ -54,13 +61,15 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         # TODO: handle size=0 (no upload necessary)
 
-        sent = self.send_ack_metadata(filehash, filename, 42, 0, addr)
+        sent = self.send_ack_metadata(
+            filehash, filename, upload_id, start_at, addr)
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def handle_file_upload(self, data, addr):
         print('received File_Upload from', addr)
 
-        valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(data)
+        valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(
+            data)
         if not valid:
             return
 
@@ -71,11 +80,17 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('sent {} bytes back to {}'.format(sent, addr))
 
     def signal(self, signame):
+        """
+        UNIX signal handler.
+        """
         print("got signal %s: exit" % signame)
         self.loop.stop()
 
 
 def run(args):
+    """
+    Start running as a Server.
+    """
     loop = asyncio.get_event_loop()
 
     # bind to UDP socket
