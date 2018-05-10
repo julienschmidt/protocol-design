@@ -42,6 +42,8 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             packettype.Ack_Upload: self.handle_ack_upload,
             packettype.File_Delete: self.handle_file_delete,
             packettype.Ack_Delete: self.handle_ack_delete,
+            packettype.File_Rename: self.handle_file_rename,
+            packettype.Ack_Rename: self.handle_ack_rename,
         }
         func = handle_methods.get(ptype, self.handle_invalid_packet)
         func(data, addr)
@@ -84,6 +86,14 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
     def handle_ack_delete(self, data, addr):
         print('received Ack_Delete from', addr)
+        return
+
+    def handle_file_rename(self, data, addr):
+        print('received File_Rename from', addr)
+        return
+
+    def handle_ack_rename(self, data, addr):
+        print('received Ack_Rename from', addr)
         return
 
     def handle_invalid_packet(self, data, addr):
@@ -147,6 +157,24 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename)
+        return self.sendto(data, addr)
+
+    def send_file_delete(self, filehash, old_filename, new_filename, addr=None):
+        data = (packettype.File_Rename +
+                filehash +
+                (len(old_filename)).to_bytes(2, byteorder='big') +
+                old_filename +
+                (len(new_filename)).to_bytes(2, byteorder='big') +
+                new_filename)
+        return self.sendto(data, addr)
+
+    def send_ack_delete(self, filehash, old_filename, new_filename, addr=None):
+        data = (packettype.Ack_Rename +
+                filehash +
+                (len(old_filename)).to_bytes(2, byteorder='big') +
+                old_filename +
+                (len(new_filename)).to_bytes(2, byteorder='big') +
+                new_filename)
         return self.sendto(data, addr)
 
     # first byte must be the packet type
@@ -224,3 +252,21 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         filename_len = int.from_bytes(data[32:34], byteorder='big')
         filename = data[34:34 + filename_len]
         return (True, filehash, filename)
+
+    def unpack_file_rename(self, data):
+        filehash = data[:32]
+        old_filename_len = int.from_bytes(data[32:34], byteorder='big')
+        old_filename = data[34:34 + old_filename_len]
+        data = data[34 + old_filename_len:]
+        new_filename_len = int.from_bytes(data[:2], byteorder='big')
+        new_filename = data[2:2 + new_filename_len]
+        return (True, filehash, old_filename, new_filename)
+
+    def unpack_ack_rename(self, data):
+        filehash = data[:32]
+        old_filename_len = int.from_bytes(data[32:34], byteorder='big')
+        old_filename = data[34:34 + old_filename_len]
+        data = data[34 + old_filename_len:]
+        new_filename_len = int.from_bytes(data[:2], byteorder='big')
+        new_filename = data[2:2 + new_filename_len]
+        return (True, filehash, old_filename, new_filename)
