@@ -181,10 +181,10 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def sendto(self, data, addr=None):
         # add packet hash
         packethash = sha256.hash(data)
-        print(sha256.hex(packethash))
+        #print('sending packet with packethash: ', sha256.hex(packethash))
 
         data = packethash + data
-        #print("Sending:", len(data), data)
+        # print("sending packet with length:", len(data), 'containing the following data' ,data)
         self.transport.sendto(data, addr)
         return len(data)
 

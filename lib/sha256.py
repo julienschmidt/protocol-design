@@ -8,9 +8,7 @@ def hash(data):
 
 def hash_file(filepath):
     f = open(filepath, 'rb')
-    m = hashlib.sha256()
-    m.update(f.read())
-    return m.digest()
+    return hash(f.read())
 
 def hex(h):
     return binascii.hexlify(h)

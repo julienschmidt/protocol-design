@@ -33,9 +33,11 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('received Client_Hello from', addr)
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
+            print('received Client_Hallo was not in a correct form, not returning a Server_Hallo')
             return
 
-        print('clientID:', client_id)
+        print('client wants to connect with clientID:', client_id)
+        print('sending server hallo for containing the following file info:', self.fileinfo)
 
         # respond with Server_Hello
         sent = self.send_server_hello(self.fileinfo, addr)
