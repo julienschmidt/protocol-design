@@ -23,36 +23,36 @@ class FileEventHandler(FileSystemEventHandler):
         self.protocol = protocol
 
     def relative_filepath(self, file):
-        return files.relative_path(file, self.path)
+        return files.relative_filepath(file, self.path)
 
     def on_created(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.upload_file,
-                                       self.relative_path(event.src_path))
+                                       self.relative_filepath(event.src_path))
 
     def on_deleted(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.delete_file,
-                                       self.relative_path(event.src_path))
+                                       self.relative_filepath(event.src_path))
 
     def on_modified(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.update_file,
-                                       self.relative_path(event.src_path))
+                                       self.relative_filepath(event.src_path))
 
     def on_moved(self, event):
         if event.is_directory:
             return
 
         self.loop.call_soon_threadsafe(self.protocol.move_file,
-                                       self.relative_path(event.src_path),
-                                       self.relative_path(event.dest_path))
+                                       self.relative_filepath(event.src_path),
+                                       self.relative_filepath(event.dest_path))
 
 
 class ClientCsyncProtocol(BaseCsyncProtocol):
@@ -133,6 +133,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
         print('sent {} bytes'.format(sent))
+
 
     def handle_ack_upload(self, data, addr):
         print('received Ack_Upload from', addr)
