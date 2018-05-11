@@ -88,11 +88,19 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print(sha256.hex(filehash), filename, size,
               oct(permissions), time.ctime(modified_at))
 
-        upload_id, start_at, error = self.init_upload(
-            filehash, filename, size, permissions, modified_at)
-        if error:
-            # TODO: send error
-            pass
+        if filename in self.fileinfo and filehash == self.fileinfo[filename]:
+            # just adjust metadata, no reupload necessary
+            upload_id = 0
+            start_at = size
+            filepath = self.path + filename.decode('utf8')
+            self.set_metadata(filepath, permissions, modified_at)
+
+        else:
+            upload_id, start_at, error = self.init_upload(
+                filehash, filename, size, permissions, modified_at)
+            if error:
+                # TODO: send error
+                pass
 
         sent = self.send_ack_metadata(
             filehash, filename, upload_id, start_at, addr)
@@ -168,12 +176,18 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         filepath = self.path + upload.filename.decode('utf8')
         move(upload.tmpfile[1], filepath)
-        os.utime(filepath, times=(upload.modified_at, upload.modified_at))
-        os.chmod(filepath, upload.permissions)
+        self.set_metadata(filepath, upload.permissions, upload.modified_at)
 
         # update cached fileinfo
         self.fileinfo[upload.filename] = upload.filehash
         print("finalized", upload.filename)
+
+    def set_metadata(self, filepath, permissions, modified_at):
+        """
+        Set file metadata for the given file.
+        """
+        os.chmod(filepath, permissions)
+        os.utime(filepath, times=(modified_at, modified_at))
 
     def signal(self, signame):
         """
