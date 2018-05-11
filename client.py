@@ -104,9 +104,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         permissions = (statinfo[stat.ST_MODE] & 0o777)
         modified_at = statinfo[stat.ST_MTIME]
 
-        logging.debug("Got file info of file %s. " +
-                      "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
-                      file, filehash, size, permissions, modified_at)
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("Got file info of file %s. " +
+                          "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
+                          file, sha256.hex(filehash), size, permissions, modified_at)
 
         return {
             'filehash': filehash,
@@ -231,7 +232,7 @@ def run(args):
 
     # create UDP socket and start event loop listening to it
     server_address = (args.host, args.port)
-    print("Trying to sync with {}".format(server_address))
+    print('Trying to sync with {}:{}\n'.format(*server_address))
     connect = loop.create_datagram_endpoint(
         lambda: ClientCsyncProtocol(loop, args.path),
         remote_addr=server_address)

@@ -53,8 +53,11 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         local_files = files.list(path)
         for file in local_files:
             filehash = sha256.hash_file(self.path + file)
-            logging.debug("Found file at {} with hash {}".format(file, sha256.hex(filehash)))
             self.fileinfo[file.encode('utf8')] = filehash
+
+            if logging.getLogger().isEnabledFor(logging.DEBUG):
+                logging.debug("Found file at %s with hash %s",
+                              file, sha256.hex(filehash))
 
         # maps upload IDs to in-progress file uploads
         self.uploads = dict()
@@ -72,7 +75,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('Client wants to connect with clientID:', client_id)
 
         # respond with Server_Hello
-        sent = self.send_server_hello(self.fileinfo, addr)
+        self.send_server_hello(self.fileinfo, addr)
 
     def handle_file_metadata(self, data, addr):
         valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(
@@ -95,8 +98,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                 # TODO: send error
                 pass
 
-        sent = self.send_ack_metadata(
-            filehash, filename, upload_id, start_at, addr)
+        self.send_ack_metadata(filehash, filename, upload_id, start_at, addr)
 
         if size == 0 and upload_id > 0:
             # no upload necessary
@@ -109,7 +111,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        self.send_ack_upload(upload_id, payload_start_byte + len(payload), addr)
+        self.send_ack_upload(
+            upload_id, payload_start_byte + len(payload), addr)
 
     def gen_upload_id(self):
         """
@@ -125,7 +128,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         Initialize a new file upload and return the assigned upload ID.
         """
 
-        print("Start receiving new file upload of file named {} with size {}".format(filename, size))
+        print("receiving new file upload of file %s with size %u", filename, size)
 
         # check for existing upload to resume
         if filename in self.active_uploads:
@@ -168,7 +171,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # update cached fileinfo
         self.fileinfo[upload.filename] = upload.filehash
 
-        print("Finalized upload of file {}".format(upload.filename))
+        print("finalized upload of file %s", upload.filename)
 
     def set_metadata(self, filepath, permissions, modified_at):
         """
@@ -197,7 +200,7 @@ def run(args):
 
     # bind to UDP socket
     server_address = (args.host, args.port)
-    print('Welcome to csync! Starting UDP server on {}:{}\n'.format(*server_address))
+    print('Starting UDP server on {}:{}\n'.format(*server_address))
     listen = loop.create_datagram_endpoint(
         lambda: ServerCsyncProtocol(loop, args.path),
         local_addr=server_address)
