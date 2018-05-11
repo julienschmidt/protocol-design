@@ -6,6 +6,7 @@ import sys
 
 import client
 import server
+import logging
 
 # Client: csync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]
 # Server: csync [-s] [-p <port>]
@@ -25,10 +26,15 @@ def main():
     parser.add_argument('-p', dest='port', action='store', default=5000, type=int, help='port number')
     parser.add_argument('-f', dest='path', action='store', default=os.getcwd(), help='directory path containing files')
 
+    parser.add_argument('-verbose', dest='verbose', action='store_true', default=False, help='verbose debug output')
+
     args = parser.parse_args()
 
     # normalize path
     args.path = os.path.abspath(args.path)+'/'
+
+    if not args.verbose:
+        logging.Logger.setLevel("ERROR")
 
     if args.server:
         server.run(args)
