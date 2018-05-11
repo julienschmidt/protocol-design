@@ -56,7 +56,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         logging.info('error received: %s', exc)
 
     def datagram_received(self, data, addr):
-        logging.info('received %d bytes from %s', len(data), addr)
+        logging.debug('received %d bytes from %s', len(data), addr)
 
         # Packet should at least contain the packet hash (32 Bytes) and the
         # packet type (1 Byte)

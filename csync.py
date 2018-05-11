@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import os
 import sys
 
-import logging
 import client
 import server
 
@@ -15,7 +15,7 @@ import server
 def main():
     if sys.platform == 'win32':
         print("Windows is currently not supported.")
-        exit(1)
+        sys.exit(1)
 
     # parse flags
     parser = argparse.ArgumentParser(
