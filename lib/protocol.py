@@ -398,8 +398,12 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
                           "there is data left after parsing all files")
             return (False, {})
 
-        logging.info(
-            "successfully parsed Server_Hello: %s", remote_files)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed Server_Hello:")
+            for filename, filehash in remote_files.items():
+                logging.info("%s: %s", filename, sha256.hex(filehash))
+
+
         return (True, remote_files)
 
     def unpack_file_metadata(self, data):
