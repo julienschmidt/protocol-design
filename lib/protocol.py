@@ -403,7 +403,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             for filename, filehash in remote_files.items():
                 logging.info("%s: %s", filename, sha256.hex(filehash))
 
-
         return (True, remote_files)
 
     def unpack_file_metadata(self, data):
@@ -430,9 +429,10 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         permissions = int.from_bytes(data[8:10], byteorder='big')
         modified_at = int.from_bytes(data[10:14], byteorder='big')
 
-        logging.info("successfully parsed File_Metadata of %s "
-                     "(hash: %s). filesize: %u, permissions: %o, last modified at: %u",
-                     filename, filehash, filesize, permissions, modified_at)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed File_Metadata of %s "
+                         "(hash: %s). filesize: %u, permissions: %o, last modified at: %u",
+                         filename, sha256.hex(filehash), filesize, permissions, modified_at)
         return (True, filehash, filename, filesize, permissions, modified_at)
 
     def unpack_ack_metadata(self, data):
@@ -459,9 +459,10 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         resume_at_byte = int.from_bytes(
             data[4:12], byteorder='big') if len(data) == 4 + 8 else 0
 
-        logging.info("successfully parsed Acl_Metadata for file %s (hash: %s). "
-                     "upload ID: %u, resume at byte: %u",
-                     filename, filehash, upload_id, resume_at_byte)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed Ack_Metadata for file %s (hash: %s). "
+                         "upload ID: %u, resume at byte: %u",
+                         filename, sha256.hex(filehash), upload_id, resume_at_byte)
         return (True, filehash, filename, upload_id, resume_at_byte)
 
     def unpack_file_upload(self, data):
@@ -529,8 +530,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             logging.error("File_Delete packet did not have valid length")
             return (False, None, None)
 
-        logging.info("successfully parsed File_Delete for file %s (hash: %s).",
-                     filename, filehash)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed File_Delete for file %s (hash: %s).",
+                         filename, sha256.hex(filehash))
         return (True, filehash, filename)
 
     def unpack_ack_delete(self, data):
@@ -547,8 +549,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             logging.error("Ack_Delete packet did not have valid length")
             return (False, None, None)
 
-        logging.info("successfully parsed Ack_Delete for file %s (hash: %s)",
-                     filename, filehash)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed Ack_Delete for file %s (hash: %s)",
+                         filename, sha256.hex(filehash))
         return (True, filehash, filename)
 
     def unpack_file_rename(self, data):
@@ -574,9 +577,10 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
         new_filename = data[2:2 + new_filename_len]
 
-        logging.info("successfully parsed File_Rename packet for file %s (hash: %s)."
-                     "Should be renamed to %s",
-                     old_filename, filehash, new_filename)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed File_Rename packet for file %s (hash: %s)."
+                         "Should be renamed to %s",
+                         old_filename, sha256.hex(filehash), new_filename)
         return (True, filehash, old_filename, new_filename)
 
     def unpack_ack_rename(self, data):
@@ -602,7 +606,8 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
         new_filename = data[2:2 + new_filename_len]
 
-        logging.info("successfully parsed Ack_Rename for file %s (hash: %s)."
-                     "Should be renamed to %s",
-                     old_filename, filehash, new_filename)
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed Ack_Rename for file %s (hash: %s)."
+                         "Should be renamed to %s",
+                         old_filename, sha256.hex(filehash), new_filename)
         return (True, filehash, old_filename, new_filename)
