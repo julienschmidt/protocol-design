@@ -195,7 +195,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         packet hashes.
         Should by overwritten by the child class.
         """
-        logging.warning('Recieved and dropping invalid packet from {}'.format(addr))s
+        logging.warning('Recieved and dropping invalid packet from {}'.format(addr))
 
     def send_client_hello(self, client_id, addr=None):
         """

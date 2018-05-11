@@ -34,7 +34,7 @@ def main():
     args.path = os.path.abspath(args.path)+'/'
 
     if not args.verbose:
-        logging.Logger.setLevel("ERROR")
+        logging.basicConfig(level=logging.ERROR)
 
     if args.server:
         server.run(args)
