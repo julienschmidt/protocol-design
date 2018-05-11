@@ -172,7 +172,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Upload the given file to server.
         """
         if filehash is None:
-            filehash = sha256.hash_file(self.path + filepath)
+            filehash = sha256.hash_file(self.path + filepath.decode('utf8'))
         print("upload", filepath, sha256.hex(filehash))
 
         self.fileinfo[filepath] = filehash
