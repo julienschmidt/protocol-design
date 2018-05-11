@@ -4,9 +4,10 @@ import argparse
 import os
 import sys
 
+import logging
 import client
 import server
-import logging
+
 
 # Client: csync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]
 # Server: csync [-s] [-p <port>]
@@ -14,25 +15,33 @@ import logging
 def main():
     if sys.platform == 'win32':
         print("Windows is currently not supported.")
-        os.exit(1)
+        exit(1)
 
     # parse flags
-    parser = argparse.ArgumentParser(description='Cloud Sync', conflict_handler='resolve')
+    parser = argparse.ArgumentParser(
+        description='Cloud Sync', conflict_handler='resolve')
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('-h', dest='host', action='store', default='localhost', help='remote host (hostname or IP address)')
-    group.add_argument('-s', dest='server', action='store_true', default=False, help='run in server mode')
+    group.add_argument('-h', dest='host', action='store',
+                       default='localhost', help='remote host (hostname or IP address)')
+    group.add_argument('-s', dest='server', action='store_true',
+                       default=False, help='run in server mode')
 
-    parser.add_argument('-p', dest='port', action='store', default=5000, type=int, help='port number')
-    parser.add_argument('-f', dest='path', action='store', default=os.getcwd(), help='directory path containing files')
+    parser.add_argument('-p', dest='port', action='store',
+                        default=5000, type=int, help='port number')
+    parser.add_argument('-f', dest='path', action='store',
+                        default=os.getcwd(), help='directory path containing files')
 
-    parser.add_argument('-verbose', dest='verbose', action='store_true', default=False, help='verbose output')
-    parser.add_argument('-debug', dest='debugMode', action='store_true', default=False, help='verbose debug output')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('-verbose', dest='verbose',
+                       action='store_true', default=False, help='verbose output')
+    group.add_argument('-debug', dest='debug', action='store_true',
+                       default=False, help='verbose debug output')
 
     args = parser.parse_args()
 
     # normalize path
-    args.path = os.path.abspath(args.path)+'/'
+    args.path = os.path.abspath(args.path) + '/'
 
     # Logging Modes
     logging.basicConfig(level=logging.ERROR)
@@ -40,7 +49,7 @@ def main():
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
 
-    if args.debugMode:
+    if args.debug:
         logging.basicConfig(level=logging.DEBUG)
 
     # Start Program
