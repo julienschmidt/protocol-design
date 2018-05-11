@@ -35,6 +35,7 @@ class FileUpload:
         self.tmpfile = mkstemp()
         self.next_byte = 0
 
+
 class ServerCsyncProtocol(BaseCsyncProtocol):
     """
     Server implementation of the csync protocol
@@ -164,7 +165,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         upload = self.uploads[upload_id]
         del self.uploads[upload_id]
 
-        filepath = self.path+upload.filename.decode('utf8')
+        filepath = self.path + upload.filename.decode('utf8')
         move(upload.tmpfile[1], filepath)
         os.utime(filepath, times=(upload.modified_at, upload.modified_at))
         os.chmod(filepath, upload.permissions)
