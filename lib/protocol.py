@@ -3,7 +3,6 @@ Base for csync protocol implementations.
 """
 
 import asyncio
-import stat
 
 from enum import Enum, unique
 
@@ -213,17 +212,21 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             print(len(filename), filename, sha256.hex(filehash))
         return self.sendto(data, addr)
 
-    def send_file_metadata(self, filehash, filename, statinfo, addr=None):
+    def send_file_metadata(self, filename, fileinfo, addr=None):
         """
         Pack and send a File_Metadata packet.
         """
+        filehash = fileinfo['filehash']
+        size = fileinfo['size']
+        permissions = fileinfo['permissions']
+        modified_at = fileinfo['modified_at']
         data = (PacketType.File_Metadata +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename +
-                statinfo[stat.ST_SIZE].to_bytes(8, byteorder='big') +
-                (statinfo[stat.ST_MODE] & 0o777).to_bytes(2, byteorder='big') +
-                statinfo[stat.ST_MTIME].to_bytes(4, byteorder='big'))
+                size.to_bytes(8, byteorder='big') +
+                permissions.to_bytes(2, byteorder='big') +
+                modified_at.to_bytes(4, byteorder='big'))
         return self.sendto(data, addr)
 
     def send_ack_metadata(self, filehash, filename, upload_id, resume_at_byte=0, addr=None):

@@ -7,6 +7,7 @@ import functools
 import os
 import random
 import signal
+import stat
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -82,15 +83,29 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # list dir
         local_files = files.list(path)
         for file in local_files:
-            filehash = sha256.hash_file(self.path + file)
-            print(file, sha256.hex(filehash))
-            self.fileinfo[file.encode('utf8')] = filehash
+            filename = file.encode('utf8')
+            self.fileinfo[filename] = self.get_fileinfo(file)
 
         # start file dir observer
         event_handler = FileEventHandler(self.loop, self.path, self)
         self.observer = Observer()
         self.observer.schedule(event_handler, self.path, recursive=False)
         self.observer.start()
+
+    def get_fileinfo(self, file):
+        """
+        Get meta information about the given file.
+        """
+        filepath = self.path + file
+        statinfo = os.stat(filepath)
+        filehash = sha256.hash_file(filepath)
+        print(file, sha256.hex(filehash))
+        return {
+            'filehash': filehash,
+            'size': statinfo[stat.ST_SIZE],
+            'permissions': (statinfo[stat.ST_MODE] & 0o777),
+            'modified_at': statinfo[stat.ST_MTIME],
+        }
 
     # Socket State
     def connection_made(self, transport):
@@ -140,11 +155,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         # build file dir diff
-        for filepath, filehash in self.fileinfo.items():
-            if filepath not in remote_files:
-                self.loop.call_soon(self.upload_file, filepath, filehash)
-            elif filehash != remote_files[filepath]:
-                self.loop.call_soon(self.update_file, filepath, filehash)
+        for filename, fileinfo in self.fileinfo.items():
+            if filename not in remote_files:
+                self.loop.call_soon(self.upload_file, filename, fileinfo)
+            elif fileinfo['filehash'] != remote_files[filename]:
+                self.loop.call_soon(self.update_file, filename, fileinfo)
         print('\n')
 
     def handle_ack_metadata(self, data, addr):
@@ -170,42 +185,39 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print(upload_id, acked_bytes)
 
     # file sync methods
-    def upload_file(self, filepath, filehash=None):
+    def upload_file(self, filename, fileinfo=None):
         """
         Upload the given file to server.
         """
-        if filehash is None:
-            filehash = sha256.hash_file(self.path + filepath.decode('utf8'))
-        print("upload", filepath, sha256.hex(filehash))
-
-        self.fileinfo[filepath] = filehash
-
-        statinfo = os.stat(self.path + filepath.decode('utf8'))
+        if fileinfo is None:
+            fileinfo = self.get_fileinfo(filename.decode('utf8'))
+        self.fileinfo[filename] = fileinfo
+        print("upload", filename, sha256.hex(fileinfo['filehash']))
 
         # send file metadata
-        sent = self.send_file_metadata(filehash, filepath, statinfo)
+        sent = self.send_file_metadata(filename, fileinfo)
         print('sent {} bytes'.format(sent))
 
-    def delete_file(self, filepath, filehash=None):
+    def delete_file(self, filename):
         """
         Delete the given file from the server.
         """
-        print("delete", filepath)
+        print("delete", filename)
         # TODO: get cached filehash of deleted file and send File_Delete packet
 
-    def update_file(self, filepath, filehash=None):
+    def update_file(self, filename, fileinfo=None):
         """
         Update the given file on the server by uploading the new content.
         """
-        print("update", filepath)
-        self.upload_file(filepath, filehash)
+        print("update", filename)
+        self.upload_file(filename, fileinfo)
 
-    def move_file(self, old_filepath, new_filepath, filehash=None):
+    def move_file(self, old_filename, new_filename):
         """
         Move a file on the server by changing its path.
         """
         # sha256.hash_file(new_filepath)
-        print("move", old_filepath, "to", new_filepath)
+        print("move", old_filename, "to", new_filename)
         # TODO: specify file move / rename packet
 
 
