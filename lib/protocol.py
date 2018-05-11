@@ -210,9 +210,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
         data = bytearray(PacketType.Server_Hello)
         for filename, filehash in fileinfos.items():
+            data.extend(filehash)
             data.extend((len(filename)).to_bytes(2, byteorder='big'))
             data.extend(filename)
-            data.extend(filehash)
         return self.sendto(data, addr)
 
     def send_file_metadata(self, filename, fileinfo, addr=None):
