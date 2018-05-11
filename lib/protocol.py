@@ -98,7 +98,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Error packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Error from {}'.format(addr))
+        logging.info('Received Error from {}'.format(addr))
         return
 
     def handle_ack_error(self, data, addr):
@@ -106,7 +106,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Error packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Error from {}'.format(addr))
+        logging.info('Received Ack_Error from {}'.format(addr))
         return
 
     def handle_client_hello(self, data, addr):
@@ -114,7 +114,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Client_Hello packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Client_Hello from {}'.format(addr))
+        logging.info('Received Client_Hello from {}'.format(addr))
         return
 
     def handle_server_hello(self, data, addr):
@@ -122,7 +122,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Server_Hello packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Server_Hello from {}'.format(addr))
+        logging.info('Received Server_Hello from {}'.format(addr))
         return
 
     def handle_file_metadata(self, data, addr):
@@ -130,7 +130,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Metadata from {}'.format(addr))
+        logging.info('Received File_Metadata from {}'.format(addr))
         return
 
     def handle_ack_metadata(self, data, addr):
@@ -138,7 +138,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Metadata from {}'.format(addr))
+        logging.info('Received Ack_Metadata from {}'.format(addr))
         return
 
     def handle_file_upload(self, data, addr):
@@ -146,7 +146,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Uplaod packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Upload from {}'.format(addr))
+        logging.info('Received File_Upload from {}'.format(addr))
         return
 
     def handle_ack_upload(self, data, addr):
@@ -154,7 +154,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Upload packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Upload from {}'.format(addr))
+        logging.info('Received Ack_Upload from {}'.format(addr))
         return
 
     def handle_file_delete(self, data, addr):
@@ -162,7 +162,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Delete packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Delete from {}'.format(addr))
+        logging.info('Received File_Delete from {}'.format(addr))
         return
 
     def handle_ack_delete(self, data, addr):
@@ -170,7 +170,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Delete packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Delete from {}'.format(addr))
+        logging.info('Received Ack_Delete from {}'.format(addr))
         return
 
     def handle_file_rename(self, data, addr):
@@ -178,7 +178,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Rename packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Rename from {}'.format(addr))
+        logging.info('Received File_Rename from {}'.format(addr))
         return
 
     def handle_ack_rename(self, data, addr):
@@ -186,7 +186,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Rename packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Rename from {}'.format(addr))
+        logging.info('Received Ack_Rename from {}'.format(addr))
         return
 
     def handle_invalid_packet(self, data, addr):
@@ -350,7 +350,7 @@ s
         filename = data[34:34 + filename_len]
         data = data[34 + filename_len:]
 
-        return (False, data, filehash, filename)
+        return (True, data, filehash, filename)
 
     def unpack_client_hello(self, data):
         """
@@ -444,9 +444,8 @@ s
                           "not contain all information to parse filehash and filename")
             return (False, None, None, None, None)
 
-
         # Check if the data packet stores enough data to store the upload_id (4 Bytes)
-        if len(data) == 4 or len(data) == 4 + 8:
+        if not (len(data) == 4 or len(data) == 4 + 8):
             logging.error("File Metadata Ack Packet did not have valid length or did "
                           "not contain all information to parse `upload_id` or `upload_id` and `resume_at_byte`")
             return (False, None, None, None, None)
