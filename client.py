@@ -172,6 +172,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
         print(sha256.hex(filehash), filename, upload_id, resume_at_byte)
 
+        fileinfo = self.fileinfo[filename]
+        if fileinfo['size'] <= resume_at_byte:
+            # no further upload necessary
+            return
+
         sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
         print('sent {} bytes'.format(sent))
 
