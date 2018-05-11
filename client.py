@@ -104,8 +104,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         permissions = (statinfo[stat.ST_MODE] & 0o777)
         modified_at = statinfo[stat.ST_MTIME]
 
-        logging.debug("Got file info of file {}. [filehash: {}, size: {}, permissions: {}, modified_at: {}]"
-                      .format(file, filehash, size, permissions, modified_at))
+        logging.debug("Got file info of file %s. " +
+                      "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
+                      file, filehash, size, permissions, modified_at)
 
         return {
             'filehash': filehash,
@@ -176,7 +177,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             # no further upload necessary
             return
 
-        sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
+        self.send_file_upload(upload_id, resume_at_byte, bytes())
 
     def handle_ack_upload(self, data, addr):
         valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
@@ -194,14 +195,14 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.fileinfo[filename] = fileinfo
 
         # send file metadata
-        sent = self.send_file_metadata(filename, fileinfo)
+        self.send_file_metadata(filename, fileinfo)
 
     def delete_file(self, filename):
         """
         Delete the given file from the server.
         """
 
-        logging.info("Delete {}".format(filename))
+        logging.info("Delete %s", filename)
 
         # TODO: get cached filehash of deleted file and send File_Delete packet
 
@@ -210,7 +211,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Update the given file on the server by uploading the new content.
         """
 
-        logging.info("Update file named {}".format(filename))
+        logging.info("Update %s", filename)
 
         self.upload_file(filename, fileinfo)
 
@@ -219,9 +220,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Move a file on the server by changing its path.
         """
 
-        logging.info("Move file named {} to {}".format(old_filename, new_filename))
-
-        # TODO: specify file move / rename packet
+        logging.info("Move file %s to %s", old_filename, new_filename)
 
 
 def run(args):
@@ -232,7 +231,7 @@ def run(args):
 
     # create UDP socket and start event loop listening to it
     server_address = (args.host, args.port)
-    print("Welcome to csync! We are trying to connect to {}".format(server_address))
+    print("Trying to sync with {}".format(server_address))
     connect = loop.create_datagram_endpoint(
         lambda: ClientCsyncProtocol(loop, args.path),
         remote_addr=server_address)
