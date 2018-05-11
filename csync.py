@@ -44,11 +44,12 @@ def main():
     args.path = os.path.abspath(args.path) + '/'
 
     # Logging Modes
+    level = logging.WARNING
     if args.verbose:
-        logging.basicConfig(level=logging.INFO)
-
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
+        level = logging.INFO
+    elif args.debug:
+        level = logging.DEBUG
+    logging.basicConfig(format='[%(levelname)s] %(message)s', level=level)
 
     # Start Program
     if args.server:
