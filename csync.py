@@ -44,8 +44,6 @@ def main():
     args.path = os.path.abspath(args.path) + '/'
 
     # Logging Modes
-    logging.basicConfig(level=logging.ERROR)
-
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
 
