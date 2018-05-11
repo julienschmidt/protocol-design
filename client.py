@@ -71,12 +71,26 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         super().__init__()
         self.loop = loop
         self.path = path
-        self.observer = None
 
         # generate client ID
         self.client_id = random.getrandbits(64)
         print("clientID:", self.client_id)
+
         print('syncing path', self.path)
+
+        self.fileinfo = dict()
+        # list dir
+        local_files = files.list(path)
+        for file in local_files:
+            filehash = sha256.hash_file(self.path + file)
+            print(file, sha256.hex(filehash))
+            self.fileinfo[file.encode('utf8')] = filehash
+
+        # start file dir observer
+        event_handler = FileEventHandler(self.loop, self.path, self)
+        self.observer = Observer()
+        self.observer.schedule(event_handler, self.path, recursive=False)
+        self.observer.start()
 
     # Socket State
     def connection_made(self, transport):
@@ -124,17 +138,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if not valid:
             return
 
-        # start file dir observer
-        event_handler = FileEventHandler(self.loop, self.path, self)
-        self.observer = Observer()
-        self.observer.schedule(event_handler, self.path, recursive=False)
-        self.observer.start()
-
         # build file dir diff
-        local_files = files.list(self.path)
-        for file in local_files:
-            filehash = sha256.hash_file(self.path + file)
-            filepath = file.encode('utf8')
+        for filepath, filehash in self.fileinfo.items():
             if filepath not in remote_files:
                 self.loop.call_soon(self.upload_file, filepath, filehash)
             elif filehash != remote_files[filepath]:
@@ -170,13 +175,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             filehash = sha256.hash_file(self.path + filepath)
         print("upload", filepath, sha256.hex(filehash))
 
+        self.fileinfo[filepath] = filehash
+
         statinfo = os.stat(self.path + filepath.decode('utf8'))
 
         # send file metadata
         sent = self.send_file_metadata(filehash, filepath, statinfo)
         print('sent {} bytes'.format(sent))
-
-        # self.loop.call_later(1, )
 
     def delete_file(self, filepath, filehash=None):
         """
@@ -189,9 +194,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Update the given file on the server by uploading the new content.
         """
-        if filehash is None:
-            filehash = sha256.hash_file(self.path + filepath)
-        print("update", filepath, sha256.hex(filehash))
+        print("update", filepath)
         self.upload_file(filepath, filehash)
 
     def move_file(self, old_filepath, new_filepath, filehash=None):
