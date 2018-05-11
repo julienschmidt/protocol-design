@@ -203,16 +203,29 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Delete the given file from the server.
         """
 
-        logging.info("Delete %s", filename)
+        logging.info("Deleted file %s", filename)
 
-        # TODO: get cached filehash of deleted file and send File_Delete packet
+        fileinfo = self.fileinfo[filename]
+        filehash = fileinfo["filehash"]
+        self.send_file_delete(filehash, filename)
+        # TODO Wait for Delete File Ack and if it doesn't arrive, resend.
+
+    def handle_ack_delete(self, data, addr):
+        valid, filehash, filename = self.unpack_ack_delete(data)
+
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # TODO Stop timer that should resend Delete File Ack if filename and hash are the same as the timer's
+        logging.info("Deleted file %s was acknowledged", filename)
 
     def update_file(self, filename, fileinfo=None):
         """
         Update the given file on the server by uploading the new content.
         """
 
-        logging.info("Update %s", filename)
+        logging.info("Updated %s", filename)
 
         self.upload_file(filename, fileinfo)
 
@@ -221,7 +234,22 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Move a file on the server by changing its path.
         """
 
-        logging.info("Move file %s to %s", old_filename, new_filename)
+        logging.info("Renamed/Moved file %s to %s", old_filename, new_filename)
+
+        filehash = self.fileinfo[old_filename]["filehash"]
+        self.send_file_rename(filehash, old_filename, new_filename)
+        # TODO Wait for Rename File Ack and if it doesn't arrive, resend.
+
+    def handle_ack_rename(self, data, addr):
+        valid, filehash, old_filename, new_filename = self.unpack_ack_rename(data)
+
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # TODO Stop timer that should resend Rename File Ack if old_filename, new_filename and hash are the same as the timer's
+        logging.info("Renamed/Moved file %s to %s was acknowledged", old_filename, new_filename)
+
 
 
 def run(args):

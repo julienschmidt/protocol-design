@@ -114,6 +114,46 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         self.send_ack_upload(
             upload_id, payload_start_byte + len(payload), addr)
 
+    def handle_file_delete(self, data, addr):
+        valid, filehash, filename = self.unpack_file_delete(data)
+
+        if not valid or self.fileinfo[filename] != filehash:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # Remove the file from the file system
+        if os.path.isfile(self.path + filename):
+            os.remove(self.path + filename)
+        else:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # Remove the file from the internal fileinfo dict
+        del self.fileinfo[filename]
+
+        # Send Ack-Packet
+        self.send_ack_delete(filehash, filename)
+
+    def handle_file_rename(self, data, addr):
+        valid, filehash, old_filename, new_filename = self.unpack_file_rename(data)
+
+        if not valid or self.fileinfo[old_filename] != filehash:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # Rename the file from the file system
+        if os.path.isfile(self.path + old_filename):
+            os.renames(self.path + old_filename, self.path + new_filename)
+        else:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # Remove the old reference from the internal fileinfo dict and add a new one for the new_filename
+        del self.fileinfo[old_filename]
+        self.fileinfo[new_filename] = filehash
+
+        self.send_ack_rename(filehash, old_filename, new_filename)
+
     def gen_upload_id(self):
         """
         Generates a unique upload ID.
