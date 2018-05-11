@@ -32,11 +32,11 @@ def main():
     parser.add_argument('-f', dest='path', action='store',
                         default=os.getcwd(), help='directory path containing files')
 
-    debugGroup = parser.add_mutually_exclusive_group(required=False)
-    debugGroup.add_argument('-verbose', dest='verbose', action='store_true',
-                            default=False, help='verbose output')
-    debugGroup.add_argument('-debug', dest='debugMode', action='store_true',
-                            default=False, help='verbose debug output')
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('-verbose', dest='verbose', action='store_true',
+                       default=False, help='verbose output')
+    group.add_argument('-debug', dest='debug', action='store_true',
+                       default=False, help='verbose debug output')
 
     args = parser.parse_args()
 
@@ -47,7 +47,7 @@ def main():
     level = logging.WARNING
     if args.verbose:
         level = logging.INFO
-    elif args.debugMode:
+    elif args.debug:
         level = logging.DEBUG
     logging.basicConfig(format='[%(levelname)s] %(message)s', level=level)
 
