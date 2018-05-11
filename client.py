@@ -136,6 +136,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("received Server Hello:")
         valid, remote_files = self.unpack_server_hello(data)
         if not valid:
+            self.handle_invalid_packet(data, addr)
             return
 
         # build file dir diff
@@ -152,6 +153,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
             data)
         if not valid:
+            self.handle_invalid_packet(data, addr)
             return
         print(sha256.hex(filehash), filename, upload_id, resume_at_byte)
 
@@ -163,6 +165,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
         if not valid:
+            self.handle_invalid_packet(data, addr)
             return
         print(upload_id, acked_bytes)
 

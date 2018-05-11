@@ -68,8 +68,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('received Client_Hello from', addr)
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
-            print(
-                'received Client_Hello was not in a correct form, not returning a Server_Hello')
+            self.handle_invalid_packet(data, addr)
             return
 
         print('client wants to connect with clientID:', client_id)
@@ -84,6 +83,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(
             data)
         if not valid:
+            self.handle_invalid_packet(data, addr)
             return
         print(sha256.hex(filehash), filename, size,
               oct(permissions), time.ctime(modified_at))
@@ -109,6 +109,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(
             data)
         if not valid:
+            self.handle_invalid_packet(data, addr)
             return
 
         print(upload_id, payload_start_byte, payload)
