@@ -53,12 +53,13 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         self.transport = transport
 
     def error_received(self, exc):
-        logging.info('error received: {}'.format(exc))
+        logging.info('error received: %s', exc)
 
     def datagram_received(self, data, addr):
-        logging.info('received {} bytes from {}'.format(len(data), addr))
+        logging.info('received %d bytes from %s', len(data), addr)
 
-        # Packet should at least contain the packet hash (32 Bytes) and the packet type (1 Byte)
+        # Packet should at least contain the packet hash (32 Bytes) and the
+        # packet type (1 Byte)
         if len(data) < 32 + 1:
             self.handle_invalid_packet(data, addr)
             return
@@ -66,7 +67,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         # check packet hash
         packethash = sha256.hash(data[32:])
         if data[:32] != packethash:
-            logging.warning("Packet Hash was invalid for packet from {}".format(addr))
+            logging.warning("hash invalid for packet from %s", addr)
             self.handle_invalid_packet(data, addr)
             return
 
@@ -98,7 +99,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Error packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Error from {}'.format(addr))
+        logging.info('received Error from %s', addr)
         return
 
     def handle_ack_error(self, data, addr):
@@ -106,7 +107,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Error packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Ack_Error from {}'.format(addr))
+        logging.info('received Ack_Error from %s', addr)
         return
 
     def handle_client_hello(self, data, addr):
@@ -114,7 +115,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Client_Hello packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Client_Hello from {}'.format(addr))
+        logging.info('received Client_Hello from %s', addr)
         return
 
     def handle_server_hello(self, data, addr):
@@ -122,7 +123,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Server_Hello packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Server_Hello from {}'.format(addr))
+        logging.info('received Server_Hello from %s', addr)
         return
 
     def handle_file_metadata(self, data, addr):
@@ -130,7 +131,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received File_Metadata from {}'.format(addr))
+        logging.info('received File_Metadata from %s', addr)
         return
 
     def handle_ack_metadata(self, data, addr):
@@ -138,7 +139,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Ack_Metadata from {}'.format(addr))
+        logging.info('received Ack_Metadata from %s', addr)
         return
 
     def handle_file_upload(self, data, addr):
@@ -146,7 +147,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Uplaod packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received File_Upload from {}'.format(addr))
+        logging.info('received File_Upload from %s', addr)
         return
 
     def handle_ack_upload(self, data, addr):
@@ -154,7 +155,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Upload packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Ack_Upload from {}'.format(addr))
+        logging.info('received Ack_Upload from %s', addr)
         return
 
     def handle_file_delete(self, data, addr):
@@ -162,7 +163,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Delete packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received File_Delete from {}'.format(addr))
+        logging.info('received File_Delete from %s', addr)
         return
 
     def handle_ack_delete(self, data, addr):
@@ -170,7 +171,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Delete packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Ack_Delete from {}'.format(addr))
+        logging.info('received Ack_Delete from %s', addr)
         return
 
     def handle_file_rename(self, data, addr):
@@ -178,7 +179,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle File_Rename packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received File_Rename from {}'.format(addr))
+        logging.info('received File_Rename from %s', addr)
         return
 
     def handle_ack_rename(self, data, addr):
@@ -186,7 +187,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Handle Ack_Rename packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('Received Ack_Rename from {}'.format(addr))
+        logging.info('received Ack_Rename from %s', addr)
         return
 
     def handle_invalid_packet(self, data, addr):
@@ -195,7 +196,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         packet hashes.
         Should by overwritten by the child class.
         """
-        logging.warning('Recieved and dropping invalid packet from {}'.format(addr))
+        logging.warning('received and dropped invalid packet from %s', addr)
 
     def send_client_hello(self, client_id, addr=None):
         """
@@ -320,22 +321,29 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         data = packethash + data
         self.transport.sendto(data, addr)
 
-        logging.debug('Did Sent {} bytes'.format(len(data)))
+        logging.debug('sent %d bytes', len(data))
 
         return len(data)
 
     def unpack_filehash_and_name(self, data):
         """
-        Unpack packet and extract a filehash (32 Bytes) and a file name of variable length (2 Bytes length determiner) + Bytes to store name
-        Returning a tuple containing (Success (Bool), Remaining Data in File (Bytes), File Hash (Bytes), Filename (Bytes))
-s
+        Unpack packet and extract a filehash (32 Bytes) and a file name of
+        variable length (2 Bytes length determiner) + Bytes to store name.
+        Returning a tuple containing:
+        (Success (Bool),
+        Remaining Data in File (Bytes),
+        File Hash (Bytes),
+        Filename (Bytes))
+
         TODO: Add Table of example message
 
         """
 
-        if len(data) < 32 + 2: # Check if the data packet at least stores enough data to store the hash (32 Bytes) and filename length (2 Bytes)
-            logging.error("Packet did not have valid length to incorporate "
-                          "a filehash and name or did not contain all information")
+        # Check if the data packet at least stores enough data to store the
+        # hash (32 Bytes) and filename length (2 Bytes)
+        if len(data) < 32 + 2:
+            logging.error(
+                "packet not long enough to contain a filehash and a filename")
             return (False, None, None)
 
         # Parse filehash and filename length
@@ -343,8 +351,7 @@ s
         filename_len = int.from_bytes(data[32:34], byteorder='big')
 
         if len(data) < 32 + 2 + filename_len:
-            logging.error("Packet did not have valid length to incorporate "
-                          "a filehash and name or did not contain all information")
+            logging.error("packet too short for given filename length")
             return (False, None, None, None)
 
         filename = data[34:34 + filename_len]
@@ -361,12 +368,13 @@ s
         """
 
         if len(data) != 8:
-            logging.error("CLient Hello didn't have a  valid length to parse")
+            logging.error("Client_Hello didn't have a valid length to parse")
             return (False, None)
 
         client_id = int.from_bytes(data, byteorder='big')
 
-        logging.info("Did successfully parse Client Hello with Client ID {}".format(client_id))
+        logging.info(
+            "successfully parsed Client_Hello with ClientID %u", client_id)
         return (True, client_id)
 
     def unpack_server_hello(self, data):
@@ -378,20 +386,20 @@ s
         """
 
         remote_files = {}
-        while len(data) > 2 + 32: # Min 2 Bytes for file filename_len and 32 Bytes for Hash
-            valid, data, filehash, filename = self.unpack_filehash_and_name(data)
+        while len(data) > 2 + 32:  # Min 2 Bytes for file filename_len and 32 Bytes for Hash
+            valid, data, filehash, filename = self.unpack_filehash_and_name(
+                data)
             if not valid:
-                logging.error("Server Hello not valid length to parse "
-                              "filehash and filename of one file")
                 return (False, None)
             remote_files[filename] = filehash
 
-        if len(data) != 0:
-            logging.error("Server Hello did not have valid length, "
+        if data:
+            logging.error("Server_Hello did not have valid length, "
                           "there is data left after parsing all files")
             return (False, {})
 
-        logging.info("Did successfully parse Server Hello: {}".format(remote_files))
+        logging.info(
+            "successfully parsed Server_Hello: %s", remote_files)
         return (True, remote_files)
 
     def unpack_file_metadata(self, data):
@@ -404,18 +412,13 @@ s
 
         # Parse filehash and filename
         valid, data, filehash, filename = self.unpack_filehash_and_name(data)
-
         if not valid:
-            logging.error("File Metadata Packet did not have valid length or "
-                          "did not contain all information to parse filehash and filename")
             return (False, None, None, None, None, None)
-
 
         # Check if the data packet stores enough data to store the size (8 Bytes),
         # permissions (2 Bytes), and modified_at date (4 Bytes)
         if len(data) != 8 + 2 + 4:
-            logging.error("File Metadata Packet did not have valid length or "
-                          "did not contain all information after checking filename length")
+            logging.error("File_Metadata packet did not have valid length")
             return (False, None, None, None, None, None)
 
         # Parse filesize, permissions and modified_at
@@ -423,9 +426,9 @@ s
         permissions = int.from_bytes(data[8:10], byteorder='big')
         modified_at = int.from_bytes(data[10:14], byteorder='big')
 
-        logging.info("Did successfully parse File Metadata of file named {} "
-                     "(Hash: {}). Filesize: {}, Permissions: {}, Modified last at: {}"
-                     .format(filename, filehash, filesize, permissions, modified_at))
+        logging.info("successfully parsed File_Metadata of %s "
+                     "(hash: %s). filesize: %u, permissions: %o, last modified at: %u",
+                     filename, filehash, filesize, permissions, modified_at)
         return (True, filehash, filename, filesize, permissions, modified_at)
 
     def unpack_ack_metadata(self, data):
@@ -438,25 +441,23 @@ s
 
         # Parse filehash and filename
         valid, data, filehash, filename = self.unpack_filehash_and_name(data)
-
         if not valid:
-            logging.error("File Metadata Ack Packet did not have valid length or did "
-                          "not contain all information to parse filehash and filename")
             return (False, None, None, None, None)
 
-        # Check if the data packet stores enough data to store the upload_id (4 Bytes)
-        if not (len(data) == 4 or len(data) == 4 + 8):
-            logging.error("File Metadata Ack Packet did not have valid length or did "
-                          "not contain all information to parse `upload_id` or `upload_id` and `resume_at_byte`")
+        # Check if the data packet stores enough data to store the upload_id (4
+        # Bytes)
+        if len(data) != 4 and len(data) != 4 + 8:
+            logging.error("Ack_Metadata packet did not have valid length")
             return (False, None, None, None, None)
 
         # Parse upload_id and possibly resume_at_byte
         upload_id = int.from_bytes(data[:4], byteorder='big')
-        resume_at_byte = int.from_bytes( data[4:12], byteorder='big') if len(data) == 4 + 8 else 0
+        resume_at_byte = int.from_bytes(
+            data[4:12], byteorder='big') if len(data) == 4 + 8 else 0
 
-        logging.info("Did successfully parse File Metadata Ack of file named {} (Hash: {}). "
-                     "The Upload ID is {} and upload shoud resume at the {}. Byte"
-                     .format(filename, filehash, upload_id, resume_at_byte))
+        logging.info("successfully parsed Acl_Metadata for file %s (hash: %s). "
+                     "upload ID: %u, resume at byte: %u",
+                     filename, filehash, upload_id, resume_at_byte)
         return (True, filehash, filename, upload_id, resume_at_byte)
 
     def unpack_file_upload(self, data):
@@ -470,8 +471,7 @@ s
         # Check if the data packet stores enough data to at least store the upload_id (4 Bytes),
         # payload_start_byte (8 Bytes) and the payload_len (2 Bytes)
         if len(data) < 4 + 8 + 2:
-            logging.error("File Upload Packet did not have valid length or did not contain all "
-                          "information to parse `upload_id`, `payload_start_byte` and `payload_len`")
+            logging.error("File_Upload packet did not have valid length")
             return (False, None, None, None)
 
         upload_id = int.from_bytes(data[:4], byteorder='big')
@@ -480,14 +480,13 @@ s
         data = data[4 + 8 + 2:]
 
         if len(data) != payload_len:
-            logging.error("File Metadate Ack Packet did not have valid length or did not contain all "
-                          "information to parse `upload_id`, `payload_start_byte` and `payload_len`")
+            logging.error("File_Upload packet did not have valid length")
             return (False, None, None, None)
         payload = data
 
-        logging.info("Did successfully parse File Upload for Upload ID: {}. "
-                     "The Payload starts at the {}. Byte and is {}"
-                     .format(upload_id, payload_start_byte, payload))
+        logging.info("successfully parsed File_Upload with upload ID: %u. "
+                     "The payload starts at byte %u and has length %u",
+                     upload_id, payload_start_byte, len(payload))
         return (True, upload_id, payload_start_byte, payload)
 
     def unpack_ack_upload(self, data):
@@ -498,18 +497,18 @@ s
 
         """
 
-        # Check if the data packet stores enough data to at least store the upload_id (4 Bytes) and the acked_bytes (8 Bytes)
+        # Check if the data packet stores enough data to at least store the
+        # upload_id (4 Bytes) and the acked_bytes (8 Bytes)
         if len(data) != 4 + 8:
-            logging.error("File Metadate Ack Packet did not have valid length or did not contain all "
-                          "information to parse `upload_id` and `acked_bytes`")
+            logging.error("Ack_Upload packet did not have valid length")
             return (False, None, None)
 
         upload_id = int.from_bytes(data[:4], byteorder='big')
         acked_bytes = int.from_bytes(data[4:12], byteorder='big')
 
-        logging.info("Did successfully parse File Upload Ack for Upload ID: {}. "
-                     "Acknowledged all bytes until the {}. Byte"
-                     .format(upload_id, acked_bytes))
+        logging.info("successfully parsed Ack_Upload for upload ID: %u. "
+                     "Acknowledged all bytes until %u",
+                     upload_id, acked_bytes)
         return (True, upload_id, acked_bytes)
 
     def unpack_file_delete(self, data):
@@ -522,14 +521,12 @@ s
 
         # Parse filehash and filename
         valid, data, filehash, filename = self.unpack_filehash_and_name(data)
-
-        if not valid or len(data) != 0:
-            logging.error("File Delete Packet did not have valid length or "
-                          "did not contain all information to parse filehash and filename")
+        if not valid or data:
+            logging.error("File_Delete packet did not have valid length")
             return (False, None, None)
 
-        logging.info("Did successfully parse File Delete of file named {} (Hash: {})."
-                     .format(filename, filehash))
+        logging.info("successfully parsed File_Delete for file %s (hash: %s).",
+                     filename, filehash)
         return (True, filehash, filename)
 
     def unpack_ack_delete(self, data):
@@ -542,14 +539,12 @@ s
 
         # Parse filehash and filename
         valid, data, filehash, filename = self.unpack_filehash_and_name(data)
-
-        if not valid or len(data) != 0:
-            logging.error("File Delete Packet Ack did not have valid length or "
-                          "did not contain all information to parse filehash and filename")
+        if not valid or data:
+            logging.error("Ack_Delete packet did not have valid length")
             return (False, None, None)
 
-        logging.info("Did successfully parse File Delete Ack of file named {} (Hash: {})."
-                     .format(filename, filehash))
+        logging.info("successfully parsed Ack_Delete for file %s (hash: %s)",
+                     filename, filehash)
         return (True, filehash, filename)
 
     def unpack_file_rename(self, data):
@@ -561,24 +556,23 @@ s
         """
 
         # Parse filehash and filename
-        valid, data, filehash, old_filename = self.unpack_filehash_and_name(data)
+        valid, data, filehash, old_filename = self.unpack_filehash_and_name(
+            data)
 
         if not valid or len(data) <= 2:
-            logging.error("File Rename Packet did not have valid length or "
-                          "did not contain all information to parse filehash and filename")
+            logging.error("File_Rename packet did not have valid length")
             return (False, None, None)
-
 
         new_filename_len = int.from_bytes(data[:2], byteorder='big')
         if len(data) != new_filename_len:
-            logging.error("File Rename Packet did not have valid length to contain all information to parse the new filename")
+            logging.error("File_Rename packet did not have valid length")
             return (False, None, None)
 
         new_filename = data[2:2 + new_filename_len]
 
-        logging.info("Did successfully parse File Rename of file currently named {} (Hash: {})."
-                     "Should be renamed to {}"
-                     .format(old_filename, filehash, new_filename))
+        logging.info("successfully parsed File_Rename packet for file %s (hash: %s)."
+                     "Should be renamed to %s",
+                     old_filename, filehash, new_filename)
         return (True, filehash, old_filename, new_filename)
 
     def unpack_ack_rename(self, data):
@@ -590,22 +584,21 @@ s
         """
 
         # Parse filehash and filename
-        valid, data, filehash, old_filename = self.unpack_filehash_and_name(data)
+        valid, data, filehash, old_filename = self.unpack_filehash_and_name(
+            data)
 
         if not valid or len(data) <= 2:
-            logging.error("File Rename Packet Ack did not have valid length or "
-                          "did not contain all information to parse filehash and filename")
+            logging.warning("Ack_Rename did not have valid length")
             return (False, None, None)
 
         new_filename_len = int.from_bytes(data[:2], byteorder='big')
         if len(data) != new_filename_len:
-            logging.error(
-                "File Rename Packet Ack did not have valid length to contain all information to parse the new filename")
+            logging.warning("Ack_Rename did not have valid length")
             return (False, None, None)
 
         new_filename = data[2:2 + new_filename_len]
 
-        logging.info("Did successfully parse File Rename Ack of file currently named {} (Hash: {})."
-                     "Should be renamed to {}"
-                     .format(old_filename, filehash, new_filename))
+        logging.info("successfully parsed Ack_Rename for file %s (hash: %s)."
+                     "Should be renamed to %s",
+                     old_filename, filehash, new_filename)
         return (True, filehash, old_filename, new_filename)
