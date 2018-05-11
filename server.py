@@ -107,7 +107,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         print('sent {} bytes back to {}'.format(sent, addr))
 
         print("upload size", size)
-        if size == 0:
+        if size == 0 and upload_id > 0:
             # no upload necessary
             self.finalize_upload(upload_id)
 
