@@ -26,16 +26,24 @@ def main():
     parser.add_argument('-p', dest='port', action='store', default=5000, type=int, help='port number')
     parser.add_argument('-f', dest='path', action='store', default=os.getcwd(), help='directory path containing files')
 
-    parser.add_argument('-verbose', dest='verbose', action='store_true', default=False, help='verbose debug output')
+    parser.add_argument('-verbose', dest='verbose', action='store_true', default=False, help='verbose output')
+    parser.add_argument('-debug', dest='debugMode', action='store_true', default=False, help='verbose debug output')
 
     args = parser.parse_args()
 
     # normalize path
     args.path = os.path.abspath(args.path)+'/'
 
-    if not args.verbose:
-        logging.basicConfig(level=logging.ERROR)
+    # Logging Modes
+    logging.basicConfig(level=logging.ERROR)
 
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO)
+
+    if args.debugMode:
+        logging.basicConfig(level=logging.DEBUG)
+
+    # Start Program
     if args.server:
         server.run(args)
     else:

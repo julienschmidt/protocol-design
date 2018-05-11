@@ -7,7 +7,7 @@ import functools
 import os
 import random
 import signal
-import time
+import logging
 
 from shutil import move
 from tempfile import mkstemp
@@ -46,16 +46,15 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         self.loop = loop
         self.path = path
 
-        print('storing in', path)
+        print('Storing files in', path)
 
         self.fileinfo = dict()
         # list dir
         local_files = files.list(path)
         for file in local_files:
             filehash = sha256.hash_file(self.path + file)
-            print(file, sha256.hex(filehash))
+            logging.debug("Found file at {} with hash {}".format(file, sha256.hex(filehash)))
             self.fileinfo[file.encode('utf8')] = filehash
-        print('\n')
 
         # maps upload IDs to in-progress file uploads
         self.uploads = dict()
@@ -65,28 +64,22 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         self.active_uploads = dict()
 
     def handle_client_hello(self, data, addr):
-        print('received Client_Hello from', addr)
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
 
-        print('client wants to connect with clientID:', client_id)
+        print('Client wants to connect with clientID:', client_id)
 
         # respond with Server_Hello
         sent = self.send_server_hello(self.fileinfo, addr)
-        print('sent {} bytes back to {}'.format(sent, addr))
 
     def handle_file_metadata(self, data, addr):
-        print('received File_Metadata from', addr)
-
         valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(
             data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
-        print(sha256.hex(filehash), filename, size,
-              oct(permissions), time.ctime(modified_at))
 
         if filename in self.fileinfo and filehash == self.fileinfo[filename]:
             # just adjust metadata, no reupload necessary
@@ -104,27 +97,19 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         sent = self.send_ack_metadata(
             filehash, filename, upload_id, start_at, addr)
-        print('sent {} bytes back to {}'.format(sent, addr))
 
-        print("upload size", size)
         if size == 0 and upload_id > 0:
             # no upload necessary
             self.finalize_upload(upload_id)
 
     def handle_file_upload(self, data, addr):
-        print('received File_Upload from', addr)
-
         valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(
             data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
 
-        print(upload_id, payload_start_byte, payload)
-
-        sent = self.send_ack_upload(
-            upload_id, payload_start_byte + len(payload), addr)
-        print('sent {} bytes back to {}'.format(sent, addr))
+        self.send_ack_upload(upload_id, payload_start_byte + len(payload), addr)
 
     def gen_upload_id(self):
         """
@@ -139,6 +124,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         """
         Initialize a new file upload and return the assigned upload ID.
         """
+
+        print("Start receiving new file upload of file named {} with size {}".format(filename, size))
 
         # check for existing upload to resume
         if filename in self.active_uploads:
@@ -180,7 +167,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         # update cached fileinfo
         self.fileinfo[upload.filename] = upload.filehash
-        print("finalized", upload.filename)
+
+        print("Finalized upload of file {}".format(upload.filename))
 
     def set_metadata(self, filepath, permissions, modified_at):
         """
@@ -193,7 +181,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         """
         UNIX signal handler.
         """
-        print("got signal %s: exit" % signame)
+        print("Got signal %s: exit" % signame)
         self.loop.stop()
 
         # remove all temporary files
@@ -208,9 +196,8 @@ def run(args):
     loop = asyncio.get_event_loop()
 
     # bind to UDP socket
-    print("Starting UDP server")
     server_address = (args.host, args.port)
-    print('starting up on {}:{}\n'.format(*server_address))
+    print('Welcome to csync! Starting UDP server on {}:{}\n'.format(*server_address))
     listen = loop.create_datagram_endpoint(
         lambda: ServerCsyncProtocol(loop, args.path),
         local_addr=server_address)
@@ -221,7 +208,7 @@ def run(args):
                                 functools.partial(protocol.signal, signame))
 
     print("Event loop running forever, press Ctrl+C to interrupt.")
-    print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
+    print("PID %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
 
     try:
         loop.run_forever()

@@ -8,6 +8,7 @@ import os
 import random
 import signal
 import stat
+import logging
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -75,9 +76,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         # generate client ID
         self.client_id = random.getrandbits(64)
-        print("clientID:", self.client_id)
+        print("ClientID:", self.client_id)
 
-        print('syncing path', self.path)
+        print("Syncing path:", self.path)
 
         self.fileinfo = dict()
         # list dir
@@ -99,12 +100,18 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filepath = self.path + file
         statinfo = os.stat(filepath)
         filehash = sha256.hash_file(filepath)
-        print(file, sha256.hex(filehash))
+        size = statinfo[stat.ST_SIZE]
+        permissions = (statinfo[stat.ST_MODE] & 0o777)
+        modified_at = statinfo[stat.ST_MTIME]
+
+        logging.debug("Got file info of file {}. [filehash: {}, size: {}, permissions: {}, modified_at: {}]"
+                      .format(file, filehash, size, permissions, modified_at))
+
         return {
             'filehash': filehash,
-            'size': statinfo[stat.ST_SIZE],
-            'permissions': (statinfo[stat.ST_MODE] & 0o777),
-            'modified_at': statinfo[stat.ST_MTIME],
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
         }
 
     # Socket State
@@ -124,7 +131,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         UNIX signal handler.
         """
-        print("got signal %s: exit" % signame)
+        print("Got signal %s: exit" % signame)
         self.stop()
 
     # State
@@ -132,11 +139,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Start client protocol by sending a Client_Hello.
         """
-        print("sending Client Hello...")
-        sent = self.send_client_hello(self.client_id)
-        print('sent {} bytes'.format(sent))
 
-        print("awaiting Server Hello...\n")
+        self.send_client_hello(self.client_id)
 
     def stop(self):
         """
@@ -148,7 +152,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
     # Packet Handlers
     def handle_server_hello(self, data, addr):
-        print("received Server Hello:")
         valid, remote_files = self.unpack_server_hello(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
@@ -160,17 +163,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                 self.loop.call_soon(self.upload_file, filename, fileinfo)
             elif fileinfo['filehash'] != remote_files[filename]:
                 self.loop.call_soon(self.update_file, filename, fileinfo)
-        print('\n')
 
     def handle_ack_metadata(self, data, addr):
-        print('received Ack_Metadata from', addr)
-
         valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
             data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
-        print(sha256.hex(filehash), filename, upload_id, resume_at_byte)
 
         fileinfo = self.fileinfo[filename]
         if fileinfo['size'] <= resume_at_byte:
@@ -178,16 +177,12 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         sent = self.send_file_upload(upload_id, resume_at_byte, bytes())
-        print('sent {} bytes'.format(sent))
 
     def handle_ack_upload(self, data, addr):
-        print('received Ack_Upload from', addr)
-
         valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
-        print(upload_id, acked_bytes)
 
     # file sync methods
     def upload_file(self, filename, fileinfo=None):
@@ -197,32 +192,35 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if fileinfo is None:
             fileinfo = self.get_fileinfo(filename.decode('utf8'))
         self.fileinfo[filename] = fileinfo
-        print("upload", filename, sha256.hex(fileinfo['filehash']))
 
         # send file metadata
         sent = self.send_file_metadata(filename, fileinfo)
-        print('sent {} bytes'.format(sent))
 
     def delete_file(self, filename):
         """
         Delete the given file from the server.
         """
-        print("delete", filename)
+
+        logging.info("Delete {}".format(filename))
+
         # TODO: get cached filehash of deleted file and send File_Delete packet
 
     def update_file(self, filename, fileinfo=None):
         """
         Update the given file on the server by uploading the new content.
         """
-        print("update", filename)
+
+        logging.info("Update file named {}".format(filename))
+
         self.upload_file(filename, fileinfo)
 
     def move_file(self, old_filename, new_filename):
         """
         Move a file on the server by changing its path.
         """
-        # sha256.hash_file(new_filepath)
-        print("move", old_filename, "to", new_filename)
+
+        logging.info("Move file named {} to {}".format(old_filename, new_filename))
+
         # TODO: specify file move / rename packet
 
 
@@ -234,7 +232,7 @@ def run(args):
 
     # create UDP socket and start event loop listening to it
     server_address = (args.host, args.port)
-    print(server_address)
+    print("Welcome to csync! We are trying to connect to {}".format(server_address))
     connect = loop.create_datagram_endpoint(
         lambda: ClientCsyncProtocol(loop, args.path),
         remote_addr=server_address)
@@ -245,7 +243,7 @@ def run(args):
                                 functools.partial(protocol.signal, signame))
 
     print("Event loop running forever, press Ctrl+C to interrupt.")
-    print("pid %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
+    print("PID %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
 
     try:
         loop.run_forever()

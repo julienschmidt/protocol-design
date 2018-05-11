@@ -319,6 +319,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
         data = packethash + data
         self.transport.sendto(data, addr)
+
+        logging.debug('Did Sent {} bytes'.format(len(data)))
+
         return len(data)
 
     def unpack_filehash_and_name(self, data):

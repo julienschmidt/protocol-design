@@ -21,4 +21,6 @@ See `csync --help` for all options.
 `-s` Server mode: accept incoming connections from any host  
 `-p` Specify the port number (default: `5000`)  
 `-f` Directory that should be used to upload (client mode) or store the files (server mode)   
-`-h` Remote hosts
+`-h` Remote hosts  
+`-verbose` Enable logging of most events  
+`-debug` Enable debug logging, all events are logged
