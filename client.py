@@ -10,6 +10,8 @@ import signal
 import stat
 import logging
 
+import aiofiles
+
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -77,7 +79,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # generate client ID
         self.client_id = random.getrandbits(64)
         print("ClientID:", self.client_id)
-
         print("Syncing path:", self.path)
 
         self.fileinfo = dict()
@@ -92,6 +93,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.observer = Observer()
         self.observer.schedule(event_handler, self.path, recursive=False)
         self.observer.start()
+
+        self.active_uploads = dict()
+        self.pending_upload_acks = dict()
 
     def get_fileinfo(self, file):
         """
@@ -148,9 +152,17 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Stop the client.
         """
-        self.loop.stop()
+
+        # cancel all upload tasks
+        for upload in self.active_uploads.values():
+            upload[1].cancel()
+
+        # stop the file observer
         if self.observer:
             self.observer.stop()
+
+        # stop the event loop
+        self.loop.stop()
 
     # Packet Handlers
     def handle_server_hello(self, data, addr):
@@ -177,14 +189,24 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if fileinfo['size'] <= resume_at_byte:
             # no further upload necessary
             return
+        if fileinfo['filehash'] != filehash:
+            # file changed in the meantime
+            return
 
-        self.send_file_upload(upload_id, resume_at_byte, bytes())
+        upload_task = self.loop.create_task(self.do_upload(
+            filename, fileinfo, upload_id, resume_at_byte))
+        self.active_uploads[filename] = (upload_id, upload_task)
 
     def handle_ack_upload(self, data, addr):
         valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
+
+        ack = self.pending_upload_acks.get(upload_id, None)
+        if ack is None:
+            return
+        ack.set_result(acked_bytes)
 
     # file sync methods
     def upload_file(self, filename, fileinfo=None):
@@ -250,6 +272,30 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # TODO Stop timer that should resend Rename File Ack if old_filename, new_filename and hash are the same as the timer's
         logging.info("Renamed/Moved file %s to %s was acknowledged", old_filename, new_filename)
 
+
+    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
+        filepath = self.path + filename.decode('utf8')
+        size = fileinfo['size']
+        try:
+            async with aiofiles.open(filepath, mode='rb', loop=self.loop) as file:
+                if resume_at_byte > 0:
+                    await file.seek(resume_at_byte)
+
+                pos = resume_at_byte
+                while pos < size:
+                    buf = await file.read(512)
+                    ack = asyncio.Future(loop=self.loop)
+                    self.pending_upload_acks[upload_id] = ack
+                    self.send_file_upload(upload_id, pos, buf)
+                    try:
+                        acked_bytes = await asyncio.wait_for(ack, timeout=1.0, loop=self.loop)
+                    except asyncio.TimeoutError:
+                        print("ack timeout, resending...")
+                        await file.seek(pos)
+                        continue
+                    pos = acked_bytes
+        except (asyncio.CancelledError, RuntimeError):
+            return
 
 
 def run(args):
