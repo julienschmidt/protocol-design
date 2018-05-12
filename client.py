@@ -209,7 +209,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         ack = self.pending_upload_acks.get(upload_id, None)
         if ack is None:
             return
-        ack.set_result(acked_bytes)
+        if not ack[0].done():
+            ack[0].set_result(None)
+        ack[1] = max(ack[1], acked_bytes)
 
     # file sync methods
     def upload_file(self, filename, fileinfo=None):
@@ -219,6 +221,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if fileinfo is None:
             fileinfo = self.get_fileinfo(filename.decode('utf8'))
         self.fileinfo[filename] = fileinfo
+
+        # cancel any active upload for the same file
+        active_upload = self.active_uploads.get(filename, None)
+        if not active_upload is None:
+            active_upload[1].cancel()
 
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
@@ -312,25 +319,25 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
                 if resume_at_byte > 0:
                     await f.seek(resume_at_byte)
-
                 pos = resume_at_byte
+
+                ack = [None, pos]
+                self.pending_upload_acks[upload_id] = ack
                 while pos < size:
                     buf = await f.read(buf_size)
-                    ack = asyncio.Future(loop=self.loop)
-                    self.pending_upload_acks[upload_id] = ack
+                    ack[0] = asyncio.Future(loop=self.loop)
                     self.send_file_upload(upload_id, pos, buf)
                     try:
-                        acked_bytes = await asyncio.wait_for(ack,
-                                                             timeout=self.resend_delay,
-                                                             loop=self.loop)
+                        await asyncio.wait_for(ack[0], timeout=self.resend_delay, loop=self.loop)
                     except asyncio.TimeoutError:
                         print("ack timeout, resending...")
                         await f.seek(pos)
                         continue
-                    pos = acked_bytes
+                    pos = ack[1]
         except RuntimeError:
             return
 
+        del self.active_uploads[filename]
         print("Upload of file \"%s\" was finished" % filename)
 
 
