@@ -32,7 +32,7 @@ class ChunksBuffer:
         self.deque = deque([], maxlen)
         self.maxlen = maxlen
 
-    def add(self, chunk):
+    def put(self, chunk):
         """
         Adds a chunk to the buffer. If the buffer already contains the maximum
         number of chunks, the chunk with the highest start_byte is replaced with
@@ -55,7 +55,6 @@ class ChunksBuffer:
         Calculates the max available byte position from a given start position
         when considering all chunks in the buffer.
         """
-
         matching_chunks = 0
         for item in self.deque:
             if item[0] > available:
@@ -295,7 +294,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
                                 # buffer chunks which can not be immediately
                                 # written
-                                buffered_chunks.add((start_byte, payload))
+                                buffered_chunks.put((start_byte, payload))
                                 continue
 
                             # skip old data
