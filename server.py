@@ -94,10 +94,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         upload = self.uploads.get(upload_id, None)
         if upload is None:
             return
-        next_chunk = upload['next_chunk']
-        if next_chunk.done():
-            return
-        next_chunk.set_result((start_byte, payload, addr))
+        chunk_queue = upload['chunk_queue']
+        chunk_queue.put_nowait((start_byte, payload, addr))
 
     def handle_file_delete(self, data, addr):
         valid, filehash, filename = self.unpack_file_delete(data)
@@ -196,8 +194,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             'tmpfile': mkstemp(),
             'next_byte': 0,
 
-            # Future to pass chunks to the receiver coroutine
-            'next_chunk': asyncio.Future(loop=self.loop),
+            # Queue to pass chunks to the receiver coroutine
+            'chunk_queue': asyncio.Queue(loop=self.loop),
         }
 
         upload_task = self.loop.create_task(
@@ -220,11 +218,11 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         if size > 0:
             try:
                 async with aiofiles.open(tmpfile, mode='wb', loop=self.loop) as f:
+                    chunk_queue = upload['chunk_queue']
                     pos = 0
                     while pos < size:
                         # TODO: add timeout
-                        start_byte, payload, addr = await upload['next_chunk']
-                        upload['next_chunk'] = asyncio.Future(loop=self.loop)
+                        start_byte, payload, addr = await chunk_queue.get()
                         logging.debug("chunk %s, %s, %s", pos,
                                       start_byte, len(payload))
                         if start_byte != pos:
