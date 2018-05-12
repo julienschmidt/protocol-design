@@ -101,8 +101,12 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
     def handle_file_delete(self, data, addr):
         valid, filehash, filename = self.unpack_file_delete(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
 
-        if not valid or self.fileinfo[filename] != filehash:
+        fileinfo = self.fileinfo.get(filename, None)
+        if fileinfo is None or self.fileinfo[filename] != filehash:
             self.handle_invalid_packet(data, addr)
             return
 
