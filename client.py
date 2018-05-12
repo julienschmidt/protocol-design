@@ -76,6 +76,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.loop = loop
         self.path = path
         self.resend_delay = 1.0  # Fixed value because no congestion control
+        self.chunk_size = 1024  # Should be adjusted to MTU later
 
         # generate client ID
         self.client_id = random.getrandbits(64)
@@ -307,12 +308,14 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         size = fileinfo['size']
         try:
             async with aiofiles.open(filepath, mode='rb', loop=self.loop) as f:
+                buf_size = self.chunk_size
+
                 if resume_at_byte > 0:
                     await f.seek(resume_at_byte)
 
                 pos = resume_at_byte
                 while pos < size:
-                    buf = await f.read(512)
+                    buf = await f.read(buf_size)
                     ack = asyncio.Future(loop=self.loop)
                     self.pending_upload_acks[upload_id] = ack
                     self.send_file_upload(upload_id, pos, buf)
