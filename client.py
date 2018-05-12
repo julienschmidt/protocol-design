@@ -108,9 +108,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         permissions = (statinfo[stat.ST_MODE] & 0o777)
         modified_at = statinfo[stat.ST_MTIME]
 
-        logging.debug("Got file info of file %s. " +
-                      "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
-                      file, sha256.hex(filehash), size, permissions, modified_at)
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("Got file info of file %s. " +
+                          "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
+                          file, sha256.hex(filehash), size, permissions, modified_at)
         return {
             'filehash': filehash,
             'size': size,
@@ -237,7 +238,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        # TODO Stop timer that should resend Delete File Ack if filename and hash are the same as the timer's
+        # TODO Stop timer that should resend Delete File Ack if filename and
+        # hash are the same as the timer's
         logging.info("Deleted file %s was acknowledged", filename)
 
     def update_file(self, filename, fileinfo=None):
@@ -261,15 +263,17 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # TODO Wait for Rename File Ack and if it doesn't arrive, resend.
 
     def handle_ack_rename(self, data, addr):
-        valid, filehash, old_filename, new_filename = self.unpack_ack_rename(data)
+        valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
+            data)
 
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
 
-        # TODO Stop timer that should resend Rename File Ack if old_filename, new_filename and hash are the same as the timer's
-        logging.info("Renamed/Moved file %s to %s was acknowledged", old_filename, new_filename)
-
+        # TODO Stop timer that should resend Rename File Ack if old_filename,
+        # new_filename and hash are the same as the timer's
+        logging.info("Renamed/Moved file %s to %s was acknowledged",
+                     old_filename, new_filename)
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
         filepath = self.path + filename.decode('utf8')
