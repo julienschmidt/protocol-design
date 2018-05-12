@@ -9,31 +9,14 @@ import random
 import signal
 import logging
 
+import aiofiles
+
 from shutil import move
 from tempfile import mkstemp
 
 from lib import files
 from lib import sha256
 from lib.protocol import BaseCsyncProtocol, ErrorType
-
-
-class FileUpload:
-    """
-    Data holder for file uploads.
-    """
-
-    def __init__(self, filehash, filename, size, permissions, modified_at):
-        self.filehash = filehash
-        self.filename = filename
-        self.size = size
-        self.permissions = permissions
-        self.modified_at = modified_at
-
-        # Buffered Chunks (Linked List)
-        self.buffered_chunks = list()
-
-        self.tmpfile = mkstemp()
-        self.next_byte = 0
 
 
 class ServerCsyncProtocol(BaseCsyncProtocol):
@@ -100,19 +83,21 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         self.send_ack_metadata(filehash, filename, upload_id, start_at, addr)
 
-        if size == 0 and upload_id > 0:
-            # no upload necessary
-            self.finalize_upload(upload_id)
-
     def handle_file_upload(self, data, addr):
-        valid, upload_id, payload_start_byte, payload = self.unpack_file_upload(
+        valid, upload_id, start_byte, payload = self.unpack_file_upload(
             data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
 
-        self.send_ack_upload(
-            upload_id, payload_start_byte + len(payload), addr)
+        upload = self.uploads.get(upload_id, None)
+        if upload is None:
+            return
+        next_chunk = upload['next_chunk']
+        if next_chunk.done():
+            return
+        next_chunk.set_result((start_byte, payload, addr))
+
 
     def handle_file_delete(self, data, addr):
         valid, filehash, filename = self.unpack_file_delete(data)
@@ -148,7 +133,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        # Remove the old reference from the internal fileinfo dict and add a new one for the new_filename
+        # Remove the old reference from the internal fileinfo dict and add a
+        # new one for the new_filename
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = filehash
 
@@ -168,50 +154,99 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         Initialize a new file upload and return the assigned upload ID.
         """
 
-        print("receiving new file upload of file %s with size %u", filename, size)
+        print("receiving new file upload of file {} with size {}".format(filename, size))
 
         # check for existing upload to resume
         if filename in self.active_uploads:
-            upload_id = self.active_uploads[filename]
+            upload_id, _ = self.active_uploads[filename]
             upload = self.uploads[upload_id]
 
-            if upload.filehash == filehash and upload.size == size:
+            if upload['filehash'] == filehash and upload['size'] == size:
                 # resume upload
-                upload.permissions = permissions
-                upload.modified_at = modified_at
-                start_at = upload.next_byte
+                upload['permissions'] = permissions
+                upload['modified_at'] = modified_at
+                start_at = upload['next_byte']
                 return (upload_id, start_at, None)
 
-            elif upload.modified_at >= modified_at:
+            elif upload['modified_at'] >= modified_at:
                 # only accept newer files
                 return (0, 0, ErrorType.Conflict)
 
         start_at = 0
         upload_id = self.gen_upload_id()
-        self.uploads[upload_id] = FileUpload(
-            filehash, filename, size, permissions, modified_at)
-        self.active_uploads[filename] = upload_id
+        upload = {
+            'filehash': filehash,
+            'filename': filename,
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
+
+            'tmpfile': mkstemp(),
+            'next_byte': 0,
+
+            # Future to pass chunks to the receiver coroutine
+            'next_chunk': asyncio.Future(loop=self.loop),
+        }
+
+        if size == 0:
+            # no upload necessary
+            self.finalize_upload(upload_id, upload)
+        else:
+            upload_task = self.loop.create_task(self.receive_upload(upload_id, upload))
+            self.uploads[upload_id] = upload
+            self.active_uploads[filename] = (upload_id, upload_task)
 
         return (upload_id, start_at, None)
 
-    def finalize_upload(self, upload_id):
+    async def receive_upload(self, upload_id, upload):
+        size = upload['size']
+        try:
+            async with aiofiles.open(upload['tmpfile'][1], mode='wb', loop=self.loop) as file:
+                pos = 0
+                while pos < size:
+                    # TODO: add timeout
+                    start_byte, payload, addr = await upload['next_chunk']
+                    upload['next_chunk'] = asyncio.Future(loop=self.loop)
+                    print('chunk', pos, start_byte, len(payload))
+                    if start_byte != pos:
+                        # TODO: buffer chunks instead
+                        if start_byte > pos:
+                            continue
+                        diff = pos-start_byte
+                        if diff > len(payload):
+                            continue
+                        payload = payload[diff:]
+                    pos += len(payload)
+                    self.send_ack_upload(upload_id, pos, addr)
+                    await file.write(payload)
+        except RuntimeError:
+            return
+        self.finalize_upload(upload_id, upload)
+
+    def finalize_upload(self, upload_id, upload=None):
         """
         Finalized file upload by moving the tmp file to the correct path and
         applying the file permissions and modified time.
         Afterwards it updates the servers fileinfo cache.
         """
+        if upload is None:
+            upload = self.uploads[upload_id]
 
-        upload = self.uploads[upload_id]
+        filename = upload['filename']
+        filehash = upload['filehash']
+
         del self.uploads[upload_id]
+        del self.active_uploads[filename]
 
-        filepath = self.path + upload.filename.decode('utf8')
-        move(upload.tmpfile[1], filepath)
-        self.set_metadata(filepath, upload.permissions, upload.modified_at)
+        filepath = self.path + filename.decode('utf8')
+        move(upload['tmpfile'][1], filepath)
+        self.set_metadata(filepath, upload['permissions'], upload['modified_at'])
 
         # update cached fileinfo
-        self.fileinfo[upload.filename] = upload.filehash
+        # TODO: check filehash
+        self.fileinfo[filename] = filehash
 
-        print("finalized upload of file %s", upload.filename)
+        print("finalized upload of file %s", filename)
 
     def set_metadata(self, filepath, permissions, modified_at):
         """
@@ -229,7 +264,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         # remove all temporary files
         for upload in self.uploads.values():
-            os.remove(upload.tmpfile[1])
+            os.remove(upload['tmpfile'][1])
 
 
 def run(args):
