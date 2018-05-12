@@ -98,8 +98,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         self.active_uploads = dict()
         self.pending_upload_acks = dict()
-        self.pending_delete_timer = dict()
-        self.pending_rename_timer = dict()
+        self.pending_delete_calls = dict()
+        self.pending_rename_calls = dict()
 
     def get_fileinfo(self, file):
         """
@@ -234,9 +234,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filehash = fileinfo["filehash"]
         self.send_file_delete(filehash, filename)
 
-        timer = threading.Timer(self.rtt, self.delete_file, [filename])
-        self.pending_delete_timer[filename] = timer
-        timer.start()
+        handler = self.loop.call_later(self.rtt, self.delete_file, [filename])
+        self.pending_delete_calls[filename] = handler
 
     def handle_ack_delete(self, data, addr):
         valid, filehash, filename = self.unpack_ack_delete(data)
@@ -245,9 +244,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        timer = self.pending_delete_timer[filename]
-        timer.cancel()
-        del self.pending_delete_timer[filename]
+        handler = self.pending_delete_calls[filename]
+        handler.cancel()
+        del self.pending_delete_calls[filename]
 
         del self.fileinfo[filename]
 
@@ -272,9 +271,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filehash = self.fileinfo[old_filename]["filehash"]
         self.send_file_rename(filehash, old_filename, new_filename)
 
-        timer = threading.Timer(self.rtt, self.move_file, [old_filename, new_filename])
-        self.pending_rename_timer[old_filename] = timer
-        timer.start()
+        handler = self.loop.call_later(self.rtt, self.move_file, [old_filename, new_filename])
+        self.pending_rename_calls[old_filename] = handler
 
     def handle_ack_rename(self, data, addr):
         valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
@@ -288,9 +286,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.fileinfo[new_filename] = self.get_fileinfo(
             new_filename.decode('utf8'))
 
-        timer = self.pending_rename_timer[old_filename]
-        timer.cancel()
-        del self.pending_rename_timer[old_filename]
+        handler = self.pending_rename_calls[old_filename]
+        handler.cancel()
+        del self.pending_rename_calls[old_filename]
 
         print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" % (old_filename, new_filename))
 
