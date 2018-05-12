@@ -107,8 +107,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             return
 
         # Remove the file from the file system
-        if os.path.isfile(self.path + filename):
-            os.remove(self.path + filename)
+        if os.path.isfile(self.path + filename.decode("utf-8")):
+            os.remove(self.path + filename.decode("utf-8"))
         else:
             self.handle_invalid_packet(data, addr)
             return
@@ -127,8 +127,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             return
 
         # Rename the file from the file system
-        if os.path.isfile(self.path + old_filename):
-            os.renames(self.path + old_filename, self.path + new_filename)
+        if os.path.isfile(self.path + old_filename.decode("utf-8")):
+            os.renames(self.path + old_filename.decode("utf-8"), self.path + new_filename.decode("utf-8"))
         else:
             self.handle_invalid_packet(data, addr)
             return

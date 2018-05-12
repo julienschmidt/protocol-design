@@ -108,11 +108,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         permissions = (statinfo[stat.ST_MODE] & 0o777)
         modified_at = statinfo[stat.ST_MTIME]
 
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug("Got file info of file %s. " +
-                          "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
-                          file, sha256.hex(filehash), size, permissions, modified_at)
-
+        logging.debug("Got file info of file %s. " +
+                      "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
+                      file, sha256.hex(filehash), size, permissions, modified_at)
         return {
             'filehash': filehash,
             'size': size,
