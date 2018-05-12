@@ -310,33 +310,39 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
               (old_filename, new_filename))
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
+        """
+        This coroutine reads chunks from the given file and sends it as
+        File_Upload packets. It then waits for acknowledgment and resends
+        the packet if the sent chunk is not acknowledged.
+        """
         filepath = self.path + filename.decode('utf8')
         size = fileinfo['size']
         try:
             async with aiofiles.open(filepath, mode='rb', loop=self.loop) as f:
                 buf_size = self.chunk_size
-
-                if resume_at_byte > 0:
-                    await f.seek(resume_at_byte)
                 pos = resume_at_byte
+                file_pos = 0
 
                 ack = [asyncio.Event(loop=self.loop), pos]
                 self.pending_upload_acks[upload_id] = ack
                 while pos < size:
+                    if file_pos != pos:
+                        await f.seek(pos)
+                        file_pos = pos
                     buf = await f.read(buf_size)
                     if not buf:
                         return
                     self.send_file_upload(upload_id, pos, buf)
+                    file_pos += len(buf)
                     try:
                         await asyncio.wait_for(ack[0].wait(),
                                                timeout=self.resend_delay,
                                                loop=self.loop)
                         ack[0].clear()
+                        pos = ack[1]
                     except asyncio.TimeoutError:
                         print("ack timeout, resending...")
-                        await f.seek(pos)
                         continue
-                    pos = ack[1]
         except RuntimeError:
             return
 
