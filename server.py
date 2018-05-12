@@ -4,10 +4,11 @@ Server implementation
 
 import asyncio
 import functools
+import hashlib
+import logging
 import os
 import random
 import signal
-import logging
 
 from shutil import move
 from tempfile import mkstemp
@@ -145,7 +146,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = filehash
 
-        print("Renamed/Moved file \"%s\" to \"%s\"" % (old_filename, new_filename))
+        print("Renamed/Moved file \"%s\" to \"%s\"" %
+              (old_filename, new_filename))
 
         self.send_ack_rename(filehash, old_filename, new_filename, addr)
 
@@ -163,7 +165,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         Initialize a new file upload and return the assigned upload ID.
         """
 
-        print("Receiving new file upload of file \"%s\" with size of %s bytes" % (filename, size))
+        print("Receiving new file upload of file \"%s\" with size of %s bytes" % (
+            filename, size))
 
         # check for existing upload to resume
         if filename in self.active_uploads:
@@ -197,67 +200,68 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             'next_chunk': asyncio.Future(loop=self.loop),
         }
 
-        if size == 0:
-            # no upload necessary
-            self.finalize_upload(upload_id, upload)
-        else:
-            upload_task = self.loop.create_task(
-                self.receive_upload(upload_id, upload))
-            self.uploads[upload_id] = upload
-            self.active_uploads[filename] = (upload_id, upload_task)
+        upload_task = self.loop.create_task(
+            self.receive_upload(upload_id, upload))
+        self.uploads[upload_id] = upload
+        self.active_uploads[filename] = (upload_id, upload_task)
 
         return (upload_id, start_at, None)
 
     async def receive_upload(self, upload_id, upload):
+        """
+        This coroutine waits for incoming file chunks and writes them to the
+        temporary file. When the whole file has been received, the filehash
+        is verified before moving the file to the final destination and updating
+        the cached fileinfo.
+        """
         size = upload['size']
-        try:
-            async with aiofiles.open(upload['tmpfile'][1], mode='wb', loop=self.loop) as f:
-                pos = 0
-                while pos < size:
-                    # TODO: add timeout
-                    start_byte, payload, addr = await upload['next_chunk']
-                    upload['next_chunk'] = asyncio.Future(loop=self.loop)
-                    logging.debug("chunk %s, %s, %s", pos, start_byte, len(payload))
-                    if start_byte != pos:
-                        # TODO: buffer chunks instead
-                        if start_byte > pos:
-                            continue
-                        diff = pos - start_byte
-                        if diff > len(payload):
-                            continue
-                        payload = payload[diff:]
-                    pos += len(payload)
-                    self.send_ack_upload(upload_id, pos, addr)
-                    await f.write(payload)
-        except RuntimeError:
-            return
-        self.finalize_upload(upload_id, upload)
-
-    def finalize_upload(self, upload_id, upload=None):
-        """
-        Finalized file upload by moving the tmp file to the correct path and
-        applying the file permissions and modified time.
-        Afterwards it updates the servers fileinfo cache.
-        """
-        if upload is None:
-            upload = self.uploads[upload_id]
-
+        tmpfile = upload['tmpfile'][1]
+        m = hashlib.sha256()
+        if size > 0:
+            try:
+                async with aiofiles.open(tmpfile, mode='wb', loop=self.loop) as f:
+                    pos = 0
+                    while pos < size:
+                        # TODO: add timeout
+                        start_byte, payload, addr = await upload['next_chunk']
+                        upload['next_chunk'] = asyncio.Future(loop=self.loop)
+                        logging.debug("chunk %s, %s, %s", pos,
+                                      start_byte, len(payload))
+                        if start_byte != pos:
+                            # TODO: buffer chunks instead
+                            if start_byte > pos:
+                                continue
+                            diff = pos - start_byte
+                            if diff > len(payload):
+                                continue
+                            payload = payload[diff:]
+                        pos += len(payload)
+                        self.send_ack_upload(upload_id, pos, addr)
+                        m.update(payload)
+                        await f.write(payload)
+            except RuntimeError:
+                return
+        filehash = m.digest()
         filename = upload['filename']
-        filehash = upload['filehash']
 
         del self.uploads[upload_id]
         del self.active_uploads[filename]
 
+        if filehash != upload['filehash']:
+            os.remove(tmpfile)
+            logging.error('filehash of file \"%s\" did not match!', filename)
+            # TODO: send Error
+            return
+
+        # update cached fileinfo
+        self.fileinfo[filename] = filehash
+
         filepath = self.path + filename.decode('utf8')
-        move(upload['tmpfile'][1], filepath)
+        move(tmpfile, filepath)
         self.set_metadata(
             filepath, upload['permissions'], upload['modified_at'])
 
-        # update cached fileinfo
-        # TODO: check filehash
-        self.fileinfo[filename] = filehash
-
-        print("Finalized upload of file \"%s\"" % filename)
+        print("finished upload of file \"%s\"" % filename)
 
     def set_metadata(self, filepath, permissions, modified_at):
         """
