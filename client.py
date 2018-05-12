@@ -209,9 +209,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         ack = self.pending_upload_acks.get(upload_id, None)
         if ack is None:
             return
-        if not ack[0].done():
-            ack[0].set_result(None)
         ack[1] = max(ack[1], acked_bytes)
+        ack[0].set() # notify about new ACK
 
     # file sync methods
     def upload_file(self, filename, fileinfo=None):
@@ -321,14 +320,18 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                     await f.seek(resume_at_byte)
                 pos = resume_at_byte
 
-                ack = [None, pos]
+                ack = [asyncio.Event(loop=self.loop), pos]
                 self.pending_upload_acks[upload_id] = ack
                 while pos < size:
                     buf = await f.read(buf_size)
-                    ack[0] = asyncio.Future(loop=self.loop)
+                    if not buf:
+                        return
                     self.send_file_upload(upload_id, pos, buf)
                     try:
-                        await asyncio.wait_for(ack[0], timeout=self.resend_delay, loop=self.loop)
+                        await asyncio.wait_for(ack[0].wait(),
+                                               timeout=self.resend_delay,
+                                               loop=self.loop)
+                        ack[0].clear()
                     except asyncio.TimeoutError:
                         print("ack timeout, resending...")
                         await f.seek(pos)
