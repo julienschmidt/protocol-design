@@ -121,7 +121,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[filename]
 
         # Send Ack-Packet
-        self.send_ack_delete(filehash, filename)
+        self.send_ack_delete(filehash, filename, addr)
 
     def handle_file_rename(self, data, addr):
         valid, filehash, old_filename, new_filename = self.unpack_file_rename(data)
@@ -142,7 +142,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = filehash
 
-        self.send_ack_rename(filehash, old_filename, new_filename)
+        self.send_ack_rename(filehash, old_filename, new_filename, addr)
 
     def gen_upload_id(self):
         """

@@ -240,6 +240,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         # TODO Stop timer that should resend Delete File Ack if filename and
         # hash are the same as the timer's
+
+        del self.fileinfo[filename]
+
         logging.info("Deleted file %s was acknowledged", filename)
 
     def update_file(self, filename, fileinfo=None):
@@ -269,6 +272,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
+
+        del self.fileinfo[old_filename]
+        self.fileinfo[new_filename] = self.get_fileinfo(new_filename.decode('utf8'))
 
         # TODO Stop timer that should resend Rename File Ack if old_filename,
         # new_filename and hash are the same as the timer's

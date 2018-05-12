@@ -586,12 +586,12 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
         if not valid or len(data) <= 2:
             logging.error("File_Rename packet did not have valid length")
-            return (False, None, None)
+            return (False, None, None, None)
 
         new_filename_len = int.from_bytes(data[:2], byteorder='big')
-        if len(data) != new_filename_len:
+        if len(data) != 2 + new_filename_len:
             logging.error("File_Rename packet did not have valid length")
-            return (False, None, None)
+            return (False, None, None, None)
 
         new_filename = data[2:2 + new_filename_len]
 
@@ -610,17 +610,16 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
 
         # Parse filehash and filename
-        valid, data, filehash, old_filename = self.unpack_filehash_and_name(
-            data)
+        valid, data, filehash, old_filename = self.unpack_filehash_and_name(data)
 
         if not valid or len(data) <= 2:
             logging.warning("Ack_Rename did not have valid length")
-            return (False, None, None)
+            return (False, None, None, None)
 
         new_filename_len = int.from_bytes(data[:2], byteorder='big')
-        if len(data) != new_filename_len:
+        if len(data) != 2 + new_filename_len:
             logging.warning("Ack_Rename did not have valid length")
-            return (False, None, None)
+            return (False, None, None, None)
 
         new_filename = data[2:2 + new_filename_len]
 
