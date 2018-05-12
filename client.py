@@ -223,8 +223,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        handler = self.pending_delete_callbacks[filename]
-        handler.cancel()
+        callback_handle = self.pending_delete_callbacks.get(filename, None)
+        if callback_handle is None:
+            return
+        callback_handle.cancel()
         del self.pending_delete_callbacks[filename]
 
         del self.fileinfo[filename]
@@ -246,8 +248,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = fileinfo
 
-        handler = self.pending_rename_callbacks[old_filename]
-        handler.cancel()
+        callback_handle = self.pending_rename_callbacks.get(old_filename, None)
+        if callback_handle is None:
+            return
+        callback_handle.cancel()
         del self.pending_rename_callbacks[old_filename]
 
         print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" %
@@ -281,9 +285,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filehash = fileinfo["filehash"]
         self.send_file_delete(filehash, filename)
 
-        handler = self.loop.call_later(
+        callback_handle = self.loop.call_later(
             self.resend_delay, self.delete_file, filename)
-        self.pending_delete_callbacks[filename] = handler
+        self.pending_delete_callbacks[filename] = callback_handle
 
     def update_file(self, filename, fileinfo=None):
         """
@@ -305,9 +309,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filehash = self.fileinfo[old_filename]["filehash"]
         self.send_file_rename(filehash, old_filename, new_filename)
 
-        handler = self.loop.call_later(
+        callback_handle = self.loop.call_later(
             self.resend_delay, self.move_file, old_filename, new_filename)
-        self.pending_rename_callbacks[old_filename] = handler
+        self.pending_rename_callbacks[old_filename] = callback_handle
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
         """
