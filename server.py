@@ -119,6 +119,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # Remove the file from the internal fileinfo dict
         del self.fileinfo[filename]
 
+        print("Deleted file \"%s\"" % filename)
+
         # Send Ack-Packet
         self.send_ack_delete(filehash, filename, addr)
 
@@ -143,6 +145,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = filehash
 
+        print("Renamed/Moved file \"%s\" to \"%s\"" % (old_filename, new_filename))
+
         self.send_ack_rename(filehash, old_filename, new_filename, addr)
 
     def gen_upload_id(self):
@@ -159,7 +163,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         Initialize a new file upload and return the assigned upload ID.
         """
 
-        print("receiving new file upload of file {} with size {}".format(filename, size))
+        print("Receiving new file upload of file \"%s\" with size of %s bytes" % (filename, size))
 
         # check for existing upload to resume
         if filename in self.active_uploads:
@@ -213,7 +217,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                     # TODO: add timeout
                     start_byte, payload, addr = await upload['next_chunk']
                     upload['next_chunk'] = asyncio.Future(loop=self.loop)
-                    print('chunk', pos, start_byte, len(payload))
+                    logging.debug("chunk %s, %s, %s", pos, start_byte, len(payload))
                     if start_byte != pos:
                         # TODO: buffer chunks instead
                         if start_byte > pos:
@@ -253,7 +257,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # TODO: check filehash
         self.fileinfo[filename] = filehash
 
-        print("finalized upload of file %s", filename)
+        print("Finalized upload of file \"%s\"" % filename)
 
     def set_metadata(self, filepath, permissions, modified_at):
         """

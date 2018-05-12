@@ -9,6 +9,7 @@ import random
 import signal
 import stat
 import logging
+import threading
 
 import aiofiles
 
@@ -75,6 +76,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         super().__init__()
         self.loop = loop
         self.path = path
+        self.rtt = 1.0 # Fixed value because no congestion control
 
         # generate client ID
         self.client_id = random.getrandbits(64)
@@ -96,6 +98,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         self.active_uploads = dict()
         self.pending_upload_acks = dict()
+        self.pending_delete_timer = dict()
+        self.pending_rename_timer = dict()
 
     def get_fileinfo(self, file):
         """
@@ -224,12 +228,15 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Delete the given file from the server.
         """
 
-        logging.info("Deleted file %s", filename)
+        print("Deleted file \"%s\"" % filename)
 
         fileinfo = self.fileinfo[filename]
         filehash = fileinfo["filehash"]
         self.send_file_delete(filehash, filename)
-        # TODO Wait for Delete File Ack and if it doesn't arrive, resend.
+
+        timer = threading.Timer(self.rtt, self.delete_file, [filename])
+        self.pending_delete_timer[filename] = timer
+        timer.start()
 
     def handle_ack_delete(self, data, addr):
         valid, filehash, filename = self.unpack_ack_delete(data)
@@ -238,19 +245,20 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        # TODO Stop timer that should resend Delete File Ack if filename and
-        # hash are the same as the timer's
+        timer = self.pending_delete_timer[filename]
+        timer.cancel()
+        del self.pending_delete_timer[filename]
 
         del self.fileinfo[filename]
 
-        logging.info("Deleted file %s was acknowledged", filename)
+        print("Deleted file \"%s\" was acknowledged" % filename)
 
     def update_file(self, filename, fileinfo=None):
         """
         Update the given file on the server by uploading the new content.
         """
 
-        logging.info("Updated %s", filename)
+        print("Changed \"%s\"" % filename)
 
         self.upload_file(filename, fileinfo)
 
@@ -259,11 +267,14 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Move a file on the server by changing its path.
         """
 
-        logging.info("Renamed/Moved file %s to %s", old_filename, new_filename)
+        print("Renamed/Moved file \"%s\" to \"%s\"" % (old_filename, new_filename))
 
         filehash = self.fileinfo[old_filename]["filehash"]
         self.send_file_rename(filehash, old_filename, new_filename)
-        # TODO Wait for Rename File Ack and if it doesn't arrive, resend.
+
+        timer = threading.Timer(self.rtt, self.move_file, [old_filename, new_filename])
+        self.pending_rename_timer[old_filename] = timer
+        timer.start()
 
     def handle_ack_rename(self, data, addr):
         valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
@@ -277,10 +288,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.fileinfo[new_filename] = self.get_fileinfo(
             new_filename.decode('utf8'))
 
-        # TODO Stop timer that should resend Rename File Ack if old_filename,
-        # new_filename and hash are the same as the timer's
-        logging.info("Renamed/Moved file %s to %s was acknowledged",
-                     old_filename, new_filename)
+        timer = self.pending_rename_timer[old_filename]
+        timer.cancel()
+        del self.pending_rename_timer[old_filename]
+
+        print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" % (old_filename, new_filename))
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
         filepath = self.path + filename.decode('utf8')
@@ -297,7 +309,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                     self.pending_upload_acks[upload_id] = ack
                     self.send_file_upload(upload_id, pos, buf)
                     try:
-                        acked_bytes = await asyncio.wait_for(ack, timeout=1.0, loop=self.loop)
+                        acked_bytes = await asyncio.wait_for(ack, timeout=self.rtt, loop=self.loop)
                     except asyncio.TimeoutError:
                         print("ack timeout, resending...")
                         await f.seek(pos)
@@ -305,6 +317,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                     pos = acked_bytes
         except (asyncio.CancelledError, RuntimeError):
             return
+
+        print("Upload of file \"%s\" was finished" % filename)
 
 
 def run(args):
