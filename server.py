@@ -98,7 +98,6 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             return
         next_chunk.set_result((start_byte, payload, addr))
 
-
     def handle_file_delete(self, data, addr):
         valid, filehash, filename = self.unpack_file_delete(data)
         if not valid:
@@ -124,7 +123,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         self.send_ack_delete(filehash, filename, addr)
 
     def handle_file_rename(self, data, addr):
-        valid, filehash, old_filename, new_filename = self.unpack_file_rename(data)
+        valid, filehash, old_filename, new_filename = self.unpack_file_rename(
+            data)
 
         if not valid or self.fileinfo[old_filename] != filehash:
             self.handle_invalid_packet(data, addr)
@@ -132,7 +132,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         # Rename the file from the file system
         if os.path.isfile(self.path + old_filename.decode("utf-8")):
-            os.renames(self.path + old_filename.decode("utf-8"), self.path + new_filename.decode("utf-8"))
+            os.renames(self.path + old_filename.decode("utf-8"),
+                       self.path + new_filename.decode("utf-8"))
         else:
             self.handle_invalid_packet(data, addr)
             return
@@ -196,7 +197,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             # no upload necessary
             self.finalize_upload(upload_id, upload)
         else:
-            upload_task = self.loop.create_task(self.receive_upload(upload_id, upload))
+            upload_task = self.loop.create_task(
+                self.receive_upload(upload_id, upload))
             self.uploads[upload_id] = upload
             self.active_uploads[filename] = (upload_id, upload_task)
 
@@ -205,7 +207,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
     async def receive_upload(self, upload_id, upload):
         size = upload['size']
         try:
-            async with aiofiles.open(upload['tmpfile'][1], mode='wb', loop=self.loop) as file:
+            async with aiofiles.open(upload['tmpfile'][1], mode='wb', loop=self.loop) as f:
                 pos = 0
                 while pos < size:
                     # TODO: add timeout
@@ -216,13 +218,13 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                         # TODO: buffer chunks instead
                         if start_byte > pos:
                             continue
-                        diff = pos-start_byte
+                        diff = pos - start_byte
                         if diff > len(payload):
                             continue
                         payload = payload[diff:]
                     pos += len(payload)
                     self.send_ack_upload(upload_id, pos, addr)
-                    await file.write(payload)
+                    await f.write(payload)
         except RuntimeError:
             return
         self.finalize_upload(upload_id, upload)
@@ -244,7 +246,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         filepath = self.path + filename.decode('utf8')
         move(upload['tmpfile'][1], filepath)
-        self.set_metadata(filepath, upload['permissions'], upload['modified_at'])
+        self.set_metadata(
+            filepath, upload['permissions'], upload['modified_at'])
 
         # update cached fileinfo
         # TODO: check filehash

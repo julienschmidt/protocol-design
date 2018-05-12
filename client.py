@@ -274,7 +274,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         del self.fileinfo[old_filename]
-        self.fileinfo[new_filename] = self.get_fileinfo(new_filename.decode('utf8'))
+        self.fileinfo[new_filename] = self.get_fileinfo(
+            new_filename.decode('utf8'))
 
         # TODO Stop timer that should resend Rename File Ack if old_filename,
         # new_filename and hash are the same as the timer's
@@ -285,13 +286,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         filepath = self.path + filename.decode('utf8')
         size = fileinfo['size']
         try:
-            async with aiofiles.open(filepath, mode='rb', loop=self.loop) as file:
+            async with aiofiles.open(filepath, mode='rb', loop=self.loop) as f:
                 if resume_at_byte > 0:
-                    await file.seek(resume_at_byte)
+                    await f.seek(resume_at_byte)
 
                 pos = resume_at_byte
                 while pos < size:
-                    buf = await file.read(512)
+                    buf = await f.read(512)
                     ack = asyncio.Future(loop=self.loop)
                     self.pending_upload_acks[upload_id] = ack
                     self.send_file_upload(upload_id, pos, buf)
@@ -299,7 +300,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                         acked_bytes = await asyncio.wait_for(ack, timeout=1.0, loop=self.loop)
                     except asyncio.TimeoutError:
                         print("ack timeout, resending...")
-                        await file.seek(pos)
+                        await f.seek(pos)
                         continue
                     pos = acked_bytes
         except (asyncio.CancelledError, RuntimeError):
