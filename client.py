@@ -98,6 +98,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
 
         self.active_uploads = dict()
         self.pending_upload_acks = dict()
+        self.pending_hello_callback = None
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
@@ -148,8 +149,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Start client protocol by sending a Client_Hello.
         """
-
         self.send_client_hello(self.client_id)
+        callback_handle = self.loop.call_later(self.resend_delay, self.start)
+        self.pending_hello_callback = callback_handle
 
     def stop(self):
         """
@@ -173,6 +175,12 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
+
+        callback_handle = self.pending_hello_callback
+        if callback_handle is None:
+            return
+        callback_handle.cancel()
+        self.pending_hello_callback = None
 
         # build file dir diff
         for filename, fileinfo in self.fileinfo.items():
