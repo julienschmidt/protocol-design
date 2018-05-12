@@ -99,6 +99,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.active_uploads = dict()
         self.pending_upload_acks = dict()
         self.pending_hello_callback = None
+        self.pending_metadata_callbacks = dict()
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
@@ -149,9 +150,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Start client protocol by sending a Client_Hello.
         """
-        self.send_client_hello(self.client_id)
+        # schedule resend (canceled if Server_Hello received)
         callback_handle = self.loop.call_later(self.resend_delay, self.start)
         self.pending_hello_callback = callback_handle
+
+        self.send_client_hello(self.client_id)
 
     def stop(self):
         """
@@ -176,6 +179,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
+        # cancel resend
         callback_handle = self.pending_hello_callback
         if callback_handle is None:
             return
@@ -195,6 +199,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
+
+        # cancel resend
+        callback_handle = self.pending_metadata_callbacks.get(filename, None)
+        if callback_handle is None:
+            return
+        callback_handle.cancel()
+        del self.pending_metadata_callbacks[filename]
 
         fileinfo = self.fileinfo[filename]
         if fileinfo['size'] <= resume_at_byte:
@@ -231,6 +242,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
+        # cancel resend
         callback_handle = self.pending_delete_callbacks.get(filename, None)
         if callback_handle is None:
             return
@@ -256,6 +268,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = fileinfo
 
+        # cancel resend
         callback_handle = self.pending_rename_callbacks.get(old_filename, None)
         if callback_handle is None:
             return
@@ -279,6 +292,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if not active_upload is None:
             active_upload[1].cancel()
 
+        # schedule resend (canceled if ack'ed)
+        callback_handle = self.loop.call_later(
+            self.resend_delay, self.upload_file, filename)
+        self.pending_metadata_callbacks[filename] = callback_handle
+
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
 
@@ -286,16 +304,17 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Delete the given file from the server.
         """
-
         print("Deleted file \"%s\"" % filename)
 
         fileinfo = self.fileinfo[filename]
         filehash = fileinfo["filehash"]
-        self.send_file_delete(filehash, filename)
 
+        # schedule resend (canceled if ack'ed)
         callback_handle = self.loop.call_later(
             self.resend_delay, self.delete_file, filename)
         self.pending_delete_callbacks[filename] = callback_handle
+
+        self.send_file_delete(filehash, filename)
 
     def update_file(self, filename, fileinfo=None):
         """
@@ -315,11 +334,13 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
               (old_filename, new_filename))
 
         filehash = self.fileinfo[old_filename]["filehash"]
-        self.send_file_rename(filehash, old_filename, new_filename)
 
+        # schedule resend (canceled if ack'ed)
         callback_handle = self.loop.call_later(
             self.resend_delay, self.move_file, old_filename, new_filename)
         self.pending_rename_callbacks[old_filename] = callback_handle
+
+        self.send_file_rename(filehash, old_filename, new_filename)
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
         """
