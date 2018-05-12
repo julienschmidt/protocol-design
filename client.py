@@ -210,7 +210,48 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if ack is None:
             return
         ack[1] = max(ack[1], acked_bytes)
-        ack[0].set() # notify about new ACK
+        ack[0].set()  # notify about new ACK
+
+    def handle_ack_delete(self, data, addr):
+        valid, filehash, filename = self.unpack_ack_delete(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        fileinfo = self.fileinfo.get(filename, None)
+        if fileinfo is None or fileinfo['filehash'] != filehash:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        handler = self.pending_delete_callbacks[filename]
+        handler.cancel()
+        del self.pending_delete_callbacks[filename]
+
+        del self.fileinfo[filename]
+
+        print("Deleted file \"%s\" was acknowledged" % filename)
+
+    def handle_ack_rename(self, data, addr):
+        valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        fileinfo = self.fileinfo.get(old_filename, None)
+        if fileinfo is None or fileinfo['filehash'] != filehash:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        del self.fileinfo[old_filename]
+        self.fileinfo[new_filename] = fileinfo
+
+        handler = self.pending_rename_callbacks[old_filename]
+        handler.cancel()
+        del self.pending_rename_callbacks[old_filename]
+
+        print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" %
+              (old_filename, new_filename))
 
     # file sync methods
     def upload_file(self, filename, fileinfo=None):
@@ -244,25 +285,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             self.resend_delay, self.delete_file, filename)
         self.pending_delete_callbacks[filename] = handler
 
-    def handle_ack_delete(self, data, addr):
-        valid, filehash, filename = self.unpack_ack_delete(data)
-        if not valid:
-            self.handle_invalid_packet(data, addr)
-            return
-
-        fileinfo = self.fileinfo.get(filename, None)
-        if fileinfo is None or fileinfo['filehash'] != filehash:
-            self.handle_invalid_packet(data, addr)
-            return
-
-        handler = self.pending_delete_callbacks[filename]
-        handler.cancel()
-        del self.pending_delete_callbacks[filename]
-
-        del self.fileinfo[filename]
-
-        print("Deleted file \"%s\" was acknowledged" % filename)
-
     def update_file(self, filename, fileinfo=None):
         """
         Update the given file on the server by uploading the new content.
@@ -286,28 +308,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         handler = self.loop.call_later(
             self.resend_delay, self.move_file, old_filename, new_filename)
         self.pending_rename_callbacks[old_filename] = handler
-
-    def handle_ack_rename(self, data, addr):
-        valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
-            data)
-        if not valid:
-            self.handle_invalid_packet(data, addr)
-            return
-
-        fileinfo = self.fileinfo.get(old_filename, None)
-        if fileinfo is None or fileinfo['filehash'] != filehash:
-            self.handle_invalid_packet(data, addr)
-            return
-
-        del self.fileinfo[old_filename]
-        self.fileinfo[new_filename] = fileinfo
-
-        handler = self.pending_rename_callbacks[old_filename]
-        handler.cancel()
-        del self.pending_rename_callbacks[old_filename]
-
-        print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" %
-              (old_filename, new_filename))
 
     async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
         """
