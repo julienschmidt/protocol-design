@@ -9,10 +9,10 @@ import random
 import signal
 import logging
 
-import aiofiles
-
 from shutil import move
 from tempfile import mkstemp
+
+import aiofiles
 
 from lib import files
 from lib import sha256
