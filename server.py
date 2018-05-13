@@ -309,6 +309,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                         # buffered chunks
                         available, matching_chunks = buffered_chunks.max_available(
                             pos)
+                        upload['next_byte'] = available
 
                         # send ack with max available byte
                         self.send_ack_upload(upload_id, available, addr)
