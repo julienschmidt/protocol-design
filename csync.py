@@ -33,9 +33,9 @@ def main():
                         default=os.getcwd(), help='directory path containing files')
 
     group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument('-verbose', dest='verbose', action='store_true',
+    group.add_argument('--verbose', dest='verbose', action='store_true',
                        default=False, help='verbose output')
-    group.add_argument('-debug', dest='debug', action='store_true',
+    group.add_argument('--debug', dest='debug', action='store_true',
                        default=False, help='verbose debug output')
 
     args = parser.parse_args()
