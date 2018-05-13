@@ -17,6 +17,7 @@ from watchdog.events import FileSystemEventHandler
 
 from lib import files
 from lib import sha256
+from lib.buffer import ChunkSendBuffer
 from lib.protocol import BaseCsyncProtocol
 
 
@@ -77,6 +78,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.path = path
         self.resend_delay = 1.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
+        self.max_send_ahead = 4
 
         # generate client ID
         self.client_id = random.getrandbits(64)
@@ -353,29 +355,73 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         try:
             async with aiofiles.open(filepath, mode='rb', loop=self.loop) as f:
                 buf_size = self.chunk_size
-                pos = resume_at_byte
-                file_pos = 0
+
+                pos = 0
+                if 0 < resume_at_byte <= size:
+                    await f.seek(pos)
+                    pos = resume_at_byte
 
                 ack = [asyncio.Event(loop=self.loop), pos]
                 self.pending_upload_acks[upload_id] = ack
-                while pos < size:
-                    if file_pos != pos:
-                        await f.seek(pos)
-                        file_pos = pos
-                    buf = await f.read(buf_size)
-                    if not buf:
-                        return
-                    self.send_file_upload(upload_id, pos, buf)
-                    file_pos += len(buf)
-                    try:
-                        await asyncio.wait_for(ack[0].wait(),
-                                               timeout=self.resend_delay,
-                                               loop=self.loop)
-                        ack[0].clear()
-                        pos = ack[1]
-                    except asyncio.TimeoutError:
-                        print("ack timeout, resending...")
+                acked_bytes = pos
+
+                # buffer for sent but not yet acknowledged chunks
+                chunk_buffer = ChunkSendBuffer()
+                while acked_bytes < size:
+                    # TODO: `ahead` should be global
+                    while pos < size and chunk_buffer.length < self.max_send_ahead:
+                        logging.debug('reading chunk from pos %u', pos)
+                        # read chunk from file
+                        buf = await f.read(buf_size)
+                        if not buf:
+                            return
+
+                        # send chunk
+                        self.send_file_upload(upload_id, pos, buf)
+
+                        expiry_time = self.loop.time()+self.resend_delay
+                        chunk_buffer.put(expiry_time, pos, buf)
+                        pos += len(buf)
+
+                        await asyncio.sleep(0.01) # TODO: adjust to send rate
+
+                        # check status
+                        if ack[0].is_set():
+                            ack[0].clear()
+                            acked_bytes = ack[1]
+                            logging.debug('got acks until %u', acked_bytes)
+                            current_time = self.loop.time()
+                            expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
+                            if expired_chunks:
+                                expiry_time = current_time+self.resend_delay
+                                for chunk in expired_chunks:
+                                    logging.info("resending chunk starting at byte %u", chunk[1])
+                                    self.send_file_upload(upload_id, chunk[1], chunk[2])
+                                    chunk_buffer.put(expiry_time, chunk[1], chunk[2])
+
+                    # wait blocking for ack
+                    current_time = self.loop.time()
+                    min_expiry_time = chunk_buffer.min_expiry_time()
+                    if min_expiry_time is None:
                         continue
+                    timeout = min_expiry_time - current_time
+                    if timeout > 0:
+                        try:
+                            await asyncio.wait_for(ack[0].wait(),
+                                                   timeout=timeout,
+                                                   loop=self.loop)
+                        except asyncio.TimeoutError:
+                            pass
+                    ack[0].clear()
+                    acked_bytes = ack[1]
+                    expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
+                    if expired_chunks:
+                        expiry_time = current_time+self.resend_delay
+                        for chunk in expired_chunks:
+                            logging.info("resending chunk starting at byte %u", chunk[1])
+                            self.send_file_upload(upload_id, chunk[1], chunk[2])
+                            chunk_buffer.put(expiry_time, chunk[1], chunk[2])
+
         except RuntimeError:
             return
 
