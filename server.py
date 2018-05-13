@@ -178,6 +178,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                 upload['permissions'] = permissions
                 upload['modified_at'] = modified_at
                 start_at = upload['next_byte']
+                logging.info("resume upload at byte %u", start_at)
                 return (upload_id, start_at, None)
 
             elif upload['modified_at'] >= modified_at:
