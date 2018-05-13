@@ -187,7 +187,9 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             del register[key]
             return True
 
-    def __cancel_upload(self, filename, filehash):
+    def __cancel_upload(self, filename, filehash, cancel_metadata=True):
+        if cancel_metadata:
+            self.__cancel_resend(self.pending_metadata_callbacks, filename)
         fileinfo = self.fileinfo.get(filename, None)
         if fileinfo is not None and filehash == fileinfo['filehash']:
             active_upload = self.active_uploads.get(filename, None)
@@ -208,11 +210,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         if error_type == ErrorType.File_Hash_Error:
             print('reuploading file \"%s\"' % filename.decode('utf8'))
             self.loop.call_soon(self.upload_file, filename)
-        elif error_type == ErrorType.Out_Of_Memory:
-            self.__cancel_resend(self.pending_metadata_callbacks, filename)
-            self.__cancel_upload(filename, filehash)
-        elif error_type == ErrorType.Conflict:
-            self.__cancel_resend(self.pending_metadata_callbacks, filename)
+        elif error_type in [ErrorType.Out_Of_Memory, ErrorType.Conflict, ErrorType.Upload_Failed]:
             self.__cancel_upload(filename, filehash)
         else:
             logging.error('unknown error')
@@ -320,7 +318,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         if fileinfo is None:
             fileinfo = self.__get_fileinfo(filename.decode('utf8'))
-            # prevent double uploads do to IO-notifications (e.g. create and modify)
+            # prevent double uploads do to IO-notifications (e.g. create and
+            # modify)
             existing_fileinfo = self.fileinfo.get(filename, None)
             if existing_fileinfo is not None and existing_fileinfo == fileinfo:
                 return
@@ -457,6 +456,12 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                             expired_chunks, upload_id, chunk_buffer)
 
         except RuntimeError:
+            return
+        except IOError as e:
+            description = os.strerror(e.errno)
+            logging.error('IOError %u: %s', e.errno, description)
+            del self.active_uploads[filename]
+            self.loop.call_soon(self.upload_file, filename, fileinfo)
             return
 
         del self.active_uploads[filename]

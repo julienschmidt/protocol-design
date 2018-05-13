@@ -37,6 +37,7 @@ class ErrorType(bytes, Enum):
     File_Hash_Error = b'\x00'
     Out_Of_Memory = b'\x01'
     Conflict = b'\x02'
+    Upload_Failed = b'\x03'
 
 
 class BaseCsyncProtocol(asyncio.DatagramProtocol):

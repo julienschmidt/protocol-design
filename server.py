@@ -3,6 +3,7 @@ Server implementation
 """
 
 import asyncio
+import errno
 import functools
 import hashlib
 import logging
@@ -252,6 +253,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         size = upload['size']
         tmpfile = upload['tmpfile'][1]
         m = hashlib.sha256()
+        error = None
         if size > 0:
             try:
                 async with aiofiles.open(tmpfile, mode='wb', loop=self.loop) as f:
@@ -309,20 +311,29 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                             m.update(payload)
                             await f.write(payload)
                             matching_chunks -= 1
-
-            except RuntimeError:
+            except (asyncio.CancelledError, RuntimeError):
                 return
+            except IOError as e:
+                description = os.strerror(e.errno)
+                logging.error('IOError %u: %s', e.errno, description)
+                if e.errno in [errno.ENOSPC, errno.ENOMEM, errno.EFBIG]:
+                    error = (ErrorType.Out_Of_Memory, description)
+                else:
+                    error = (ErrorType.Upload_Failed, description)
+
         filehash = m.digest()
         filename = upload['filename']
 
         del self.uploads[upload_id]
         del self.active_uploads[filename]
 
-        if filehash != upload['filehash']:
-            os.remove(tmpfile)
+        if filehash != upload['filehash'] and error is None:
             logging.error('filehash of file \"%s\" did not match!', filename)
-            self.__error(filename, filehash,
-                         ErrorType.File_Hash_Error, None, None, addr)
+            error = (ErrorType.File_Hash_Error, "filehash does not match")
+
+        if error is not None:
+            os.remove(tmpfile)
+            self.__error(filename, filehash, error[0], error[1], None, addr)
             return
 
         # update cached fileinfo
