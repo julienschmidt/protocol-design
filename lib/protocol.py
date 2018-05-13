@@ -199,6 +199,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         logging.warning('received and dropped invalid packet from %s', addr)
 
     def send_error(self, filename, filehash, error_type, description=None, addr=None):
+        """
+        Pack and send an Error packet.
+        """
         data = (PacketType.Error +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +
@@ -209,6 +212,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         return self.sendto(data, addr)
 
     def send_ack_error(self, filename, filehash, error_type, addr=None):
+        """
+        Pack and send an Ack_Error packet.
+        """
         data = (PacketType.Error +
                 filehash +
                 (len(filename)).to_bytes(2, byteorder='big') +

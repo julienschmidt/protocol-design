@@ -56,6 +56,7 @@ confidence=
 # --disable=W"
 disable=too-many-arguments,
         too-many-instance-attributes,
+        too-many-locals,
         too-few-public-methods,
         no-self-use,
         unused-argument

@@ -393,11 +393,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                             current_time = self.loop.time()
                             expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
                             if expired_chunks:
-                                expiry_time = current_time+self.resend_delay
-                                for chunk in expired_chunks:
-                                    logging.info("resending chunk starting at byte %u", chunk[1])
-                                    self.send_file_upload(upload_id, chunk[1], chunk[2])
-                                    chunk_buffer.put(expiry_time, chunk[1], chunk[2])
+                                self.__resend_chunks(expired_chunks, upload_id, chunk_buffer)
 
                     # wait blocking for ack
                     current_time = self.loop.time()
@@ -414,19 +410,23 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                             pass
                     ack[0].clear()
                     acked_bytes = ack[1]
+                    logging.debug('got acks until %u', acked_bytes)
                     expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
                     if expired_chunks:
-                        expiry_time = current_time+self.resend_delay
-                        for chunk in expired_chunks:
-                            logging.info("resending chunk starting at byte %u", chunk[1])
-                            self.send_file_upload(upload_id, chunk[1], chunk[2])
-                            chunk_buffer.put(expiry_time, chunk[1], chunk[2])
+                        self.__resend_chunks(expired_chunks, upload_id, chunk_buffer)
 
         except RuntimeError:
             return
 
         del self.active_uploads[filename]
         print("Upload of file \"%s\" was finished" % filename)
+
+    def __resend_chunks(self, expired_chunks, upload_id, chunk_buffer):
+        expiry_time = self.loop.time()+self.resend_delay
+        for chunk in expired_chunks:
+            logging.info("resending chunk starting at byte %u", chunk[1])
+            self.send_file_upload(upload_id, chunk[1], chunk[2])
+            chunk_buffer.put(expiry_time, chunk[1], chunk[2])
 
 
 def run(args):
