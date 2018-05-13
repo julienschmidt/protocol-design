@@ -10,7 +10,6 @@ import os
 import random
 import signal
 
-from collections import deque
 from shutil import move
 from tempfile import mkstemp
 
@@ -18,65 +17,8 @@ import aiofiles
 
 from lib import files
 from lib import sha256
+from lib.buffer import ChunkRecvBuffer
 from lib.protocol import BaseCsyncProtocol, ErrorType
-
-
-class ChunksBuffer:
-    """
-    ChunksBuffer is a utility to buffer a limited number of chunks which can not
-    be used immediately.
-    Chunks are expected to be a tuple (start_byte, data).
-    """
-
-    def __init__(self, maxlen=None):
-        self.deque = deque([], maxlen)
-        self.maxlen = maxlen
-
-    def put(self, chunk):
-        """
-        Adds a chunk to the buffer. If the buffer already contains the maximum
-        number of chunks, the chunk with the highest start_byte is replaced with
-        the new chunk.
-        """
-
-        # replace last item if the deque is full
-        if self.maxlen > 0 and len(self.deque) >= self.maxlen:
-            self.deque.pop()
-
-        i = 0
-        for item in self.deque:
-            if item[0] > chunk[0]:
-                break
-            i += 1
-        self.deque.insert(i, chunk)
-
-    def max_available(self, available):
-        """
-        Calculates the max available byte position from a given start position
-        when considering all chunks in the buffer.
-        """
-        matching_chunks = 0
-        for item in self.deque:
-            if item[0] > available:
-                return available, matching_chunks
-            available = max(available, item[0] + len(item[1]))
-            matching_chunks += 1
-        return available, matching_chunks
-
-    def min(self):
-        """
-        Returns the minimum required start_byte by any buffered chunk.
-        If the buffer is empty, None is returned.
-        """
-        if not self.deque:
-            return None
-        return self.deque[0][0]
-
-    def pop(self):
-        """
-        Removes and returns the chunk with the smallest start_byte.
-        """
-        return self.deque.popleft()
 
 
 class ServerCsyncProtocol(BaseCsyncProtocol):
@@ -279,7 +221,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             try:
                 async with aiofiles.open(tmpfile, mode='wb', loop=self.loop) as f:
                     chunk_queue = upload['chunk_queue']
-                    buffered_chunks = ChunksBuffer(self.max_buf_ahead)
+                    buffered_chunks = ChunkRecvBuffer(self.max_buf_ahead)
                     pos = 0
                     while pos < size:
                         # TODO: add timeout
@@ -294,7 +236,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
                                 # buffer chunks which can not be immediately
                                 # written
-                                buffered_chunks.put((start_byte, payload))
+                                buffered_chunks.put(start_byte, payload)
                                 continue
 
                             # skip old data
