@@ -57,6 +57,7 @@ confidence=
 disable=too-many-arguments,
         too-many-instance-attributes,
         too-many-locals,
+        too-many-statements,
         too-few-public-methods,
         no-self-use,
         unused-argument

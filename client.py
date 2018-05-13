@@ -18,7 +18,7 @@ from watchdog.events import FileSystemEventHandler
 from lib import files
 from lib import sha256
 from lib.buffer import ChunkSendBuffer
-from lib.protocol import BaseCsyncProtocol
+from lib.protocol import BaseCsyncProtocol, ErrorType
 
 
 class FileEventHandler(FileSystemEventHandler):
@@ -76,9 +76,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         super().__init__()
         self.loop = loop
         self.path = path
-        self.resend_delay = 1.0  # Fixed value because no congestion control
-        self.chunk_size = 1024  # Should be adjusted to MTU later
-        self.max_send_ahead = 4
 
         # generate client ID
         self.client_id = random.getrandbits(64)
@@ -90,7 +87,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         local_files = files.list(path)
         for file in local_files:
             filename = file.encode('utf8')
-            self.fileinfo[filename] = self.get_fileinfo(file)
+            self.fileinfo[filename] = self.__get_fileinfo(file)
 
         # start file dir observer
         event_handler = FileEventHandler(self.loop, self.path, self)
@@ -105,7 +102,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
-    def get_fileinfo(self, file):
+    def __get_fileinfo(self, file):
         """
         Get meta information about the given file.
         """
@@ -174,7 +171,55 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         # stop the event loop
         self.loop.stop()
 
+    def __cancel_resend(self, register, key):
+        if key is None:
+            callback_handle = register
+            if callback_handle is None:
+                return False
+            callback_handle.cancel()
+            register = None
+            return True
+        else:
+            callback_handle = register.get(key, None)
+            if callback_handle is None:
+                return False
+            callback_handle.cancel()
+            del register[key]
+            return True
+
+    def __cancel_upload(self, filename, filehash):
+        fileinfo = self.fileinfo.get(filename, None)
+        if fileinfo is not None and filehash == fileinfo['filehash']:
+            active_upload = self.active_uploads.get(filename, None)
+            if active_upload is not None:
+                active_upload[1].cancel()
+
     # Packet Handlers
+    def handle_error(self, data, addr):
+        logging.info('received Error from %s', addr)
+        valid, filehash, filename, error_type, error_id, description = self.unpack_error(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+        logging.error('%s [%s]: %s %s', filename, sha256.hex(filehash),
+                      error_type, description)
+
+        if error_type == ErrorType.File_Hash_Error:
+            print('reuploading file \"%s\"' % filename.decode('utf8'))
+            self.loop.call_soon(self.upload_file, filename)
+        elif error_type == ErrorType.Out_Of_Memory:
+            self.__cancel_resend(self.pending_metadata_callbacks, filename)
+            self.__cancel_upload(filename, filehash)
+        elif error_type == ErrorType.Conflict:
+            self.__cancel_resend(self.pending_metadata_callbacks, filename)
+            self.__cancel_upload(filename, filehash)
+        else:
+            logging.error('unknown error')
+
+        self.send_ack_error(error_id)
+        return
+
     def handle_server_hello(self, data, addr):
         valid, remote_files = self.unpack_server_hello(data)
         if not valid:
@@ -182,11 +227,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         # cancel resend
-        callback_handle = self.pending_hello_callback
-        if callback_handle is None:
+        if not self.__cancel_resend(self.pending_hello_callback, None):
             return
-        callback_handle.cancel()
-        self.pending_hello_callback = None
 
         # build file dir diff
         for filename, fileinfo in self.fileinfo.items():
@@ -203,11 +245,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         # cancel resend
-        callback_handle = self.pending_metadata_callbacks.get(filename, None)
-        if callback_handle is None:
+        if not self.__cancel_resend(self.pending_metadata_callbacks, filename):
             return
-        callback_handle.cancel()
-        del self.pending_metadata_callbacks[filename]
 
         fileinfo = self.fileinfo[filename]
         if fileinfo['size'] <= resume_at_byte:
@@ -245,11 +284,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             return
 
         # cancel resend
-        callback_handle = self.pending_delete_callbacks.get(filename, None)
-        if callback_handle is None:
+        if not self.__cancel_resend(self.pending_delete_callbacks, filename):
             return
-        callback_handle.cancel()
-        del self.pending_delete_callbacks[filename]
 
         del self.fileinfo[filename]
 
@@ -271,11 +307,8 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         self.fileinfo[new_filename] = fileinfo
 
         # cancel resend
-        callback_handle = self.pending_rename_callbacks.get(old_filename, None)
-        if callback_handle is None:
+        if not self.__cancel_resend(self.pending_rename_callbacks, old_filename):
             return
-        callback_handle.cancel()
-        del self.pending_rename_callbacks[old_filename]
 
         print("Renamed/Moved file \"%s\" to \"%s\" was acknowledged" %
               (old_filename, new_filename))
@@ -286,7 +319,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         Upload the given file to server.
         """
         if fileinfo is None:
-            fileinfo = self.get_fileinfo(filename.decode('utf8'))
+            fileinfo = self.__get_fileinfo(filename.decode('utf8'))
         self.fileinfo[filename] = fileinfo
 
         # cancel any active upload for the same file

@@ -52,6 +52,40 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         # to resume uploads
         self.active_uploads = dict()
 
+        self.pending_error_callbacks = dict()
+
+    def __error(self, filename, filehash, error_type, description=None, error_id=None, addr=None):
+        if error_id is None:
+            while True:
+                error_id = random.getrandbits(32)
+                if error_id not in self.pending_error_callbacks:
+                    break
+
+        # schedule resend (canceled if ack'ed)
+        callback_handle = self.loop.call_later(
+            self.resend_delay, self.__error,
+            filename, filehash, error_type, description, error_id, addr)
+        self.pending_error_callbacks[error_id] = callback_handle
+
+        logging.info('%s [%s]: %s %s', filename, sha256.hex(filehash),
+                     error_type, description)
+        self.send_error(filename, filehash, error_type,
+                        error_id, description, addr)
+
+    def handle_ack_error(self, data, addr):
+        valid, error_id = self.unpack_ack_error(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # cancel resend
+        callback_handle = self.pending_error_callbacks.get(error_id, None)
+        if callback_handle is None:
+            return
+        callback_handle.cancel()
+        del self.pending_error_callbacks[error_id]
+        return
+
     def handle_client_hello(self, data, addr):
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
@@ -81,8 +115,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             upload_id, start_at, error = self.__init_upload(
                 filehash, filename, size, permissions, modified_at)
             if error:
-                # TODO: send error
-                pass
+                self.__error(filename, filehash, error, None, None, addr)
+                return
 
         self.send_ack_metadata(filehash, filename, upload_id, start_at, addr)
 
@@ -202,7 +236,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         }
 
         upload_task = self.loop.create_task(
-            self.__receive_upload.(upload_id, upload))
+            self.__receive_upload(upload_id, upload))
         self.uploads[upload_id] = upload
         self.active_uploads[filename] = (upload_id, upload_task)
 
@@ -287,7 +321,8 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         if filehash != upload['filehash']:
             os.remove(tmpfile)
             logging.error('filehash of file \"%s\" did not match!', filename)
-            # TODO: send Error
+            self.__error(filename, filehash,
+                         ErrorType.File_Hash_Error, None, None, addr)
             return
 
         # update cached fileinfo

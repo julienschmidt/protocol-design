@@ -34,7 +34,7 @@ class ErrorType(bytes, Enum):
     """
     Csync protocol error types.
     """
-    Hash_Error = b'\x00'
+    File_Hash_Error = b'\x00'
     Out_Of_Memory = b'\x01'
     Conflict = b'\x02'
 
@@ -48,6 +48,9 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
     def __init__(self):
         self.transport = None
+        self.resend_delay = 1.0  # Fixed value because no congestion control
+        self.chunk_size = 1024  # Should be adjusted to MTU later
+        self.max_send_ahead = 4
 
     def connection_made(self, transport):
         self.transport = transport
@@ -198,7 +201,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
         logging.warning('received and dropped invalid packet from %s', addr)
 
-    def send_error(self, filename, filehash, error_type, description=None, addr=None):
+    def send_error(self, filename, filehash, error_type, error_id, description=None, addr=None):
         """
         Pack and send an Error packet.
         """
@@ -207,19 +210,17 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
                 (len(filename)).to_bytes(2, byteorder='big') +
                 filename +
                 error_type +
-                (len(description)).to_bytes(2, byteorder='big') if description else bytes() +
-                description if description else bytes())
+                error_id.to_bytes(4, byteorder='big') +
+                ((len(description)).to_bytes(2, byteorder='big') if description else bytes()) +
+                (description if description else bytes()))
         return self.sendto(data, addr)
 
-    def send_ack_error(self, filename, filehash, error_type, addr=None):
+    def send_ack_error(self, error_id, addr=None):
         """
         Pack and send an Ack_Error packet.
         """
-        data = (PacketType.Error +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename +
-                error_type)
+        data = (PacketType.Ack_Error +
+                error_id.to_bytes(4, byteorder='big'))
         return self.sendto(data, addr)
 
     def send_client_hello(self, client_id, addr=None):
@@ -380,11 +381,41 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
 
         return (True, data, filehash, filename)
 
+    def unpack_error(self, data):
+        """
+        Unpack the Error packet from the given bytes (data).
+        """
+
+        # Parse filehash and filename
+        valid, data, filehash, filename = self.unpack_filehash_and_name(data)
+        if not valid or len(data) < 5:
+            return (False, None, None, None, None, None)
+
+        error_type = ErrorType(data[0].to_bytes(1, byteorder='big'))
+        error_id = int.from_bytes(data[1:5], byteorder='big')
+
+        description = None
+        if len(data) >= 7:
+            description_len = int.from_bytes(data[5:7], byteorder='big')
+            if 7+description_len != len(data):
+                return (False, None, None, None, None, None)
+            description = data[7:]
+
+        return (True, filehash, filename, error_type, error_id, description)
+
+    def unpack_ack_error(self, data):
+        """
+        Unpack the Ack_Error packet from the given bytes (data).
+        """
+
+        if len(data) != 4:
+            return (False, None)
+        error_id = int.from_bytes(data, byteorder='big')
+        return (True, error_id)
+
     def unpack_client_hello(self, data):
         """
         Unpack the Client_Hello packet from the given bytes (data).
-
-
         """
 
         if len(data) != 8:
