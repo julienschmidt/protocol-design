@@ -358,9 +358,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         Remaining Data in File (Bytes),
         File Hash (Bytes),
         Filename (Bytes))
-
-        TODO: Add Table of example message
-
         """
 
         # Check if the data packet at least stores enough data to store the
@@ -387,7 +384,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
         Unpack the Client_Hello packet from the given bytes (data).
 
-        TODO: Client_Hello description
 
         """
 
@@ -404,9 +400,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_server_hello(self, data):
         """
         Unpack the Server_Hello packet from the given bytes (data).
-
-        TODO: Server_Hello description
-
         """
 
         remote_files = {}
@@ -432,9 +425,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_file_metadata(self, data):
         """
         Unpack the File_Metadata packet from the given bytes (data).
-
-        TODO: File_Metadata description
-
         """
 
         # Parse filehash and filename
@@ -462,9 +452,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_ack_metadata(self, data):
         """
         Unpack the Ack_Metadata packet from the given bytes (data).
-
-        TODO: File_Metadata description
-
         """
 
         # Parse filehash and filename
@@ -492,9 +479,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_file_upload(self, data):
         """
         Unpack the File_Upload packet from the given bytes (data).
-
-        TODO: File_Upload description
-
         """
 
         # Check if the data packet stores enough data to at least store the upload_id (4 Bytes),
@@ -521,9 +505,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_ack_upload(self, data):
         """
         Unpack the Ack_Upload packet from the given bytes (data).
-
-        TODO: File_Upload_Ack description
-
         """
 
         # Check if the data packet stores enough data to at least store the
@@ -543,9 +524,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_file_delete(self, data):
         """
         Unpack the File_Delete packet from the given bytes (data).
-
-        TODO: File_Delete description
-
         """
 
         # Parse filehash and filename
@@ -562,9 +540,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_ack_delete(self, data):
         """
         Unpack the Ack_Delete packet from the given bytes (data).
-
-        TODO: File_Delete_Ack description
-
         """
 
         # Parse filehash and filename
@@ -581,9 +556,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_file_rename(self, data):
         """
         Unpack the File_Rename packet from the given bytes (data).
-
-        TODO: File_Rename description
-
         """
 
         # Parse filehash and filename
@@ -610,9 +582,6 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
     def unpack_ack_rename(self, data):
         """
         Unpack the Ack_Rename packet from the given bytes (data).
-
-        TODO: File_Rename_Ack description
-
         """
 
         # Parse filehash and filename

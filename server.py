@@ -75,10 +75,10 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             upload_id = 0
             start_at = size
             filepath = self.path + filename.decode('utf8')
-            self.set_metadata(filepath, permissions, modified_at)
+            self.__set_metadata(filepath, permissions, modified_at)
 
         else:
-            upload_id, start_at, error = self.init_upload(
+            upload_id, start_at, error = self.__init_upload(
                 filehash, filename, size, permissions, modified_at)
             if error:
                 # TODO: send error
@@ -151,7 +151,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         self.send_ack_rename(filehash, old_filename, new_filename, addr)
 
-    def gen_upload_id(self):
+    def __gen_upload_id(self):
         """
         Generates a unique upload ID.
         """
@@ -160,7 +160,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
             if upload_id not in self.uploads:
                 return upload_id
 
-    def init_upload(self, filehash, filename, size, permissions, modified_at):
+    def __init_upload(self, filehash, filename, size, permissions, modified_at):
         """
         Initialize a new file upload and return the assigned upload ID.
         """
@@ -186,7 +186,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                 return (0, 0, ErrorType.Conflict)
 
         start_at = 0
-        upload_id = self.gen_upload_id()
+        upload_id = self.__gen_upload_id()
         upload = {
             'filehash': filehash,
             'filename': filename,
@@ -202,13 +202,13 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
         }
 
         upload_task = self.loop.create_task(
-            self.receive_upload(upload_id, upload))
+            self.__receive_upload.(upload_id, upload))
         self.uploads[upload_id] = upload
         self.active_uploads[filename] = (upload_id, upload_task)
 
         return (upload_id, start_at, None)
 
-    async def receive_upload(self, upload_id, upload):
+    async def __receive_upload(self, upload_id, upload):
         """
         This coroutine waits for incoming file chunks and writes them to the
         temporary file. When the whole file has been received, the filehash
@@ -295,12 +295,12 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         filepath = self.path + filename.decode('utf8')
         move(tmpfile, filepath)
-        self.set_metadata(
+        self.__set_metadata(
             filepath, upload['permissions'], upload['modified_at'])
 
         print("finished upload of file \"%s\"" % filename)
 
-    def set_metadata(self, filepath, permissions, modified_at):
+    def __set_metadata(self, filepath, permissions, modified_at):
         """
         Set file metadata for the given file.
         """

@@ -379,11 +379,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                         # send chunk
                         self.send_file_upload(upload_id, pos, buf)
 
-                        expiry_time = self.loop.time()+self.resend_delay
+                        expiry_time = self.loop.time() + self.resend_delay
                         chunk_buffer.put(expiry_time, pos, buf)
                         pos += len(buf)
 
-                        await asyncio.sleep(0.01) # TODO: adjust to send rate
+                        await asyncio.sleep(0.01)  # TODO: adjust to send rate
 
                         # check status
                         if ack[0].is_set():
@@ -391,9 +391,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                             acked_bytes = ack[1]
                             logging.debug('got acks until %u', acked_bytes)
                             current_time = self.loop.time()
-                            expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
+                            expired_chunks = chunk_buffer.adjust(
+                                current_time, acked_bytes)
                             if expired_chunks:
-                                self.__resend_chunks(expired_chunks, upload_id, chunk_buffer)
+                                self.__resend_chunks(
+                                    expired_chunks, upload_id, chunk_buffer)
 
                     # wait blocking for ack
                     current_time = self.loop.time()
@@ -411,9 +413,11 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
                     ack[0].clear()
                     acked_bytes = ack[1]
                     logging.debug('got acks until %u', acked_bytes)
-                    expired_chunks = chunk_buffer.adjust(current_time, acked_bytes)
+                    expired_chunks = chunk_buffer.adjust(
+                        current_time, acked_bytes)
                     if expired_chunks:
-                        self.__resend_chunks(expired_chunks, upload_id, chunk_buffer)
+                        self.__resend_chunks(
+                            expired_chunks, upload_id, chunk_buffer)
 
         except RuntimeError:
             return
@@ -422,7 +426,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         print("Upload of file \"%s\" was finished" % filename)
 
     def __resend_chunks(self, expired_chunks, upload_id, chunk_buffer):
-        expiry_time = self.loop.time()+self.resend_delay
+        expiry_time = self.loop.time() + self.resend_delay
         for chunk in expired_chunks:
             logging.info("resending chunk starting at byte %u", chunk[1])
             self.send_file_upload(upload_id, chunk[1], chunk[2])
