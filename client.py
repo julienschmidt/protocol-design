@@ -320,6 +320,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         if fileinfo is None:
             fileinfo = self.__get_fileinfo(filename.decode('utf8'))
+            # prevent double uploads do to IO-notifications (e.g. create and modify)
+            existing_fileinfo = self.fileinfo.get(filename, None)
+            if existing_fileinfo is not None and existing_fileinfo == fileinfo:
+                return
         self.fileinfo[filename] = fileinfo
 
         # cancel any active upload for the same file
