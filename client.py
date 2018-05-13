@@ -324,6 +324,7 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
             if existing_fileinfo is not None and existing_fileinfo == fileinfo:
                 return
         self.fileinfo[filename] = fileinfo
+        print("Upload \"%s\"" % filename)
 
         # cancel any active upload for the same file
         active_upload = self.active_uploads.get(filename, None)
@@ -358,9 +359,6 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         """
         Update the given file on the server by uploading the new content.
         """
-
-        print("Changed \"%s\"" % filename)
-
         self.upload_file(filename, fileinfo)
 
     def move_file(self, old_filename, new_filename):
