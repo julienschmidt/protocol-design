@@ -330,6 +330,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
                             pos += len(payload)
                             m.update(payload)
                             await f.write(payload)
+                            matching_chunks -= 1
 
             except RuntimeError:
                 return
