@@ -377,7 +377,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
             logging.error("packet too short for given filename length")
             return (False, None, None, None)
 
-        filename = data[34:34 + filename_len]
+        filename = bytes(data[34:34 + filename_len])
         data = data[34 + filename_len:]
 
         return (True, data, filehash, filename)
@@ -398,7 +398,7 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         description = None
         if len(data) >= 7:
             description_len = int.from_bytes(data[5:7], byteorder='big')
-            if 7+description_len != len(data):
+            if 7 + description_len != len(data):
                 return (False, None, None, None, None, None)
             description = data[7:]
 
@@ -617,7 +617,8 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
 
         # Parse filehash and filename
-        valid, data, filehash, old_filename = self.unpack_filehash_and_name(data)
+        valid, data, filehash, old_filename = self.unpack_filehash_and_name(
+            data)
 
         if not valid or len(data) <= 2:
             logging.warning("Ack_Rename did not have valid length")
