@@ -206,22 +206,27 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         """
         Pack and send an Error packet.
         """
-        data = (PacketType.Error +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename +
-                error_type +
-                error_id.to_bytes(4, byteorder='big') +
-                ((len(description)).to_bytes(2, byteorder='big') if description else bytes()) +
-                (description if description else bytes()))
+        data = b''.join([
+            PacketType.Error,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename,
+            error_type,
+            error_id.to_bytes(4, byteorder='big'),
+            ((len(description)).to_bytes(2, byteorder='big')
+             if description else bytes()),
+            (description if description else bytes())
+        ])
         return self.sendto(data, addr)
 
     def send_ack_error(self, error_id, addr=None):
         """
         Pack and send an Ack_Error packet.
         """
-        data = (PacketType.Ack_Error +
-                error_id.to_bytes(4, byteorder='big'))
+        data = b''.join([
+            PacketType.Ack_Error,
+            error_id.to_bytes(4, byteorder='big')
+        ])
         return self.sendto(data, addr)
 
     def send_client_hello(self, client_id, addr=None):
@@ -250,89 +255,106 @@ class BaseCsyncProtocol(asyncio.DatagramProtocol):
         size = fileinfo['size']
         permissions = fileinfo['permissions']
         modified_at = fileinfo['modified_at']
-        data = (PacketType.File_Metadata +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename +
-                size.to_bytes(8, byteorder='big') +
-                permissions.to_bytes(2, byteorder='big') +
-                modified_at.to_bytes(4, byteorder='big'))
+        data = b''.join([
+            PacketType.File_Metadata,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename,
+            size.to_bytes(8, byteorder='big'),
+            permissions.to_bytes(2, byteorder='big'),
+            modified_at.to_bytes(4, byteorder='big')
+        ])
         return self.sendto(data, addr)
 
     def send_ack_metadata(self, filehash, filename, upload_id, resume_at_byte=0, addr=None):
         """
         Pack and send a Ack_Metadata packet.
         """
-        data = (PacketType.Ack_Metadata +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename +
-                upload_id.to_bytes(4, byteorder='big') +
-                (resume_at_byte.to_bytes(8, byteorder='big') if resume_at_byte > 0 else bytes()))
+        data = b''.join([
+            PacketType.Ack_Metadata,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename,
+            upload_id.to_bytes(4, byteorder='big'),
+            (resume_at_byte.to_bytes(8, byteorder='big')
+             if resume_at_byte > 0 else bytes())
+        ])
         return self.sendto(data, addr)
 
     def send_file_upload(self, upload_id, start_byte, payload, addr=None):
         """
         Pack and send a File_Upload packet.
         """
-        data = (PacketType.File_Upload +
-                upload_id.to_bytes(4, byteorder='big') +
-                start_byte.to_bytes(8, byteorder='big') +
-                (len(payload)).to_bytes(2, byteorder='big') +
-                payload)
+        data = b''.join([
+            PacketType.File_Upload,
+            upload_id.to_bytes(4, byteorder='big'),
+            start_byte.to_bytes(8, byteorder='big'),
+            (len(payload)).to_bytes(2, byteorder='big'),
+            payload
+        ])
         return self.sendto(data, addr)
 
     def send_ack_upload(self, upload_id, acked_bytes, addr=None):
         """
         Pack and send a Ack_Upload packet.
         """
-        data = (PacketType.Ack_Upload +
-                upload_id.to_bytes(4, byteorder='big') +
-                acked_bytes.to_bytes(8, byteorder='big'))
+        data = b''.join([
+            PacketType.Ack_Upload,
+            upload_id.to_bytes(4, byteorder='big'),
+            acked_bytes.to_bytes(8, byteorder='big')
+        ])
         return self.sendto(data, addr)
 
     def send_file_delete(self, filehash, filename, addr=None):
         """
         Pack and send a File_Delete packet.
         """
-        data = (PacketType.File_Delete +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename)
+        data = b''.join([
+            PacketType.File_Delete,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename
+        ])
         return self.sendto(data, addr)
 
     def send_ack_delete(self, filehash, filename, addr=None):
         """
         Pack and send a Ack_Delete packet.
         """
-        data = (PacketType.Ack_Delete +
-                filehash +
-                (len(filename)).to_bytes(2, byteorder='big') +
-                filename)
+        data = b''.join([
+            PacketType.Ack_Delete,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename
+        ])
         return self.sendto(data, addr)
 
     def send_file_rename(self, filehash, old_filename, new_filename, addr=None):
         """
         Pack and send a File_Rename packet.
         """
-        data = (PacketType.File_Rename +
-                filehash +
-                (len(old_filename)).to_bytes(2, byteorder='big') +
-                old_filename +
-                (len(new_filename)).to_bytes(2, byteorder='big') +
-                new_filename)
+        data = b''.join([
+            PacketType.File_Rename,
+            filehash,
+            (len(old_filename)).to_bytes(2, byteorder='big'),
+            old_filename,
+            (len(new_filename)).to_bytes(2, byteorder='big'),
+            new_filename
+        ])
         return self.sendto(data, addr)
 
     def send_ack_rename(self, filehash, old_filename, new_filename, addr=None):
         """
         Pack and send a Ack_Rename packet.
         """
-        data = (PacketType.Ack_Rename +
-                filehash +
-                (len(old_filename)).to_bytes(2, byteorder='big') +
-                old_filename +
-                (len(new_filename)).to_bytes(2, byteorder='big') +
-                new_filename)
+        data = b''.join([
+            PacketType.Ack_Rename,
+            filehash,
+            (len(old_filename)).to_bytes(2, byteorder='big'),
+            old_filename,
+            (len(new_filename)).to_bytes(2, byteorder='big'),
+            new_filename
+        ])
         return self.sendto(data, addr)
 
     def sendto(self, data, addr=None):
