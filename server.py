@@ -333,7 +333,7 @@ class ServerCsyncProtocol(BaseCsyncProtocol):
 
         if error is not None:
             os.remove(tmpfile)
-            self.__error(filename, filehash, error[0], error[1], None, addr)
+            self.__error(filename, filehash, error[0], bytes(error[1]), None, addr)
             return
 
         # update cached fileinfo
