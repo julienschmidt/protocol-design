@@ -267,8 +267,10 @@ class ClientCsyncProtocol(BaseCsyncProtocol):
         ack = self.pending_upload_acks.get(upload_id, None)
         if ack is None:
             return
-        ack[1] = max(ack[1], acked_bytes)
-        ack[0].set()  # notify about new ACK
+
+        if acked_bytes > ack[1]:
+            ack[1] = acked_bytes
+            ack[0].set()  # notify about new ACK
 
     def handle_ack_delete(self, data, addr):
         valid, filehash, filename = self.unpack_ack_delete(data)
