@@ -19,12 +19,12 @@ import aiofiles
 from lib import files
 from lib import sha256
 from lib.buffer import ChunkRecvBuffer
-from lib.protocol import BaseCsyncProtocol, ErrorType
+from lib.protocol import BaseScsyncProtocol, ErrorType
 
 
-class ServerCsyncProtocol(BaseCsyncProtocol):
+class ServerScsyncProtocol(BaseScsyncProtocol):
     """
-    Server implementation of the csync protocol
+    Server implementation of the scsync protocol
     """
 
     def __init__(self, loop, path):
@@ -375,7 +375,7 @@ def run(args):
     server_address = (args.host, args.port)
     print('Starting UDP server on {}:{}\n'.format(*server_address))
     listen = loop.create_datagram_endpoint(
-        lambda: ServerCsyncProtocol(loop, args.path),
+        lambda: ServerScsyncProtocol(loop, args.path),
         local_addr=server_address)
     transport, protocol = loop.run_until_complete(listen)
 

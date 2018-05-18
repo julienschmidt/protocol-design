@@ -1,5 +1,5 @@
 """
-Base for csync protocol implementations.
+Base for scsync protocol implementations.
 """
 
 import asyncio
@@ -13,7 +13,7 @@ from . import sha256
 @unique
 class PacketType(bytes, Enum):
     """
-    Csync protocol packet types.
+    scsync protocol packet types.
     """
     Error = b'\x00'
     Ack_Error = b'\x01'
@@ -32,7 +32,7 @@ class PacketType(bytes, Enum):
 @unique
 class ErrorType(bytes, Enum):
     """
-    Csync protocol error types.
+    scsync protocol error types.
     """
     File_Hash_Error = b'\x00'
     Out_Of_Memory = b'\x01'
@@ -40,9 +40,9 @@ class ErrorType(bytes, Enum):
     Upload_Failed = b'\x03'
 
 
-class BaseCsyncProtocol(asyncio.DatagramProtocol):
+class BaseScsyncProtocol(asyncio.DatagramProtocol):
     """
-    Abstract base for csync protocol implementations.
+    Abstract base for scsync protocol implementations.
     Provides packing and unpacking of packets.
     """
     # pylint: disable=too-many-public-methods,no-self-use,unused-argument

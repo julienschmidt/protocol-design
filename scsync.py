@@ -9,8 +9,8 @@ import client
 import server
 
 
-# Client: csync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]
-# Server: csync [-s] [-p <port>]
+# Client: scsync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]
+# Server: scsync [-s] [-p <port>]
 
 def main():
     if sys.platform == 'win32':

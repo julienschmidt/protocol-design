@@ -1,10 +1,10 @@
 # pylint: disable=missing-docstring
 import unittest
 
-from lib.protocol import BaseCsyncProtocol, ErrorType, PacketType
+from lib.protocol import BaseScsyncProtocol, ErrorType, PacketType
 
 
-class TestProtocol(BaseCsyncProtocol):
+class TestProtocol(BaseScsyncProtocol):
 
     def __init__(self):
         self.data = None

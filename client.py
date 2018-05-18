@@ -18,7 +18,7 @@ from watchdog.events import FileSystemEventHandler
 from lib import files
 from lib import sha256
 from lib.buffer import ChunkSendBuffer
-from lib.protocol import BaseCsyncProtocol, ErrorType
+from lib.protocol import BaseScsyncProtocol, ErrorType
 
 
 class FileEventHandler(FileSystemEventHandler):
@@ -67,9 +67,9 @@ class FileEventHandler(FileSystemEventHandler):
                                        self.relative_filepath(event.dest_path))
 
 
-class ClientCsyncProtocol(BaseCsyncProtocol):
+class ClientScsyncProtocol(BaseScsyncProtocol):
     """
-    Client implementation of the csync protocol
+    Client implementation of the scsync protocol
     """
 
     def __init__(self, loop, path):
@@ -485,7 +485,7 @@ def run(args):
     server_address = (args.host, args.port)
     print('Trying to sync with {}:{}\n'.format(*server_address))
     connect = loop.create_datagram_endpoint(
-        lambda: ClientCsyncProtocol(loop, args.path),
+        lambda: ClientScsyncProtocol(loop, args.path),
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
 
