@@ -1,2 +1,2 @@
-aiofiles>=0.5
+aiofile>=0.5
 watchdog>=0.8
