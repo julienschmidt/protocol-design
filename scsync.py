@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+# coding: utf-8
+"""
+    scsync.module
+    ~~~~~~~~~~~~~
+
+    A secure cloud sync application.
+
+    :copyright: 2018 Andreas Ebner, Julien Schmidt, Paul Schmiedmayer
+    :license: TBD
+"""
 
 import argparse
 import logging
@@ -13,6 +23,10 @@ import server
 # Server: scsync [-s] [-p <port>]
 
 def main():
+    """
+    Initializes the program by parsing the command-line flags and either running
+    the client or the server module.
+    """
     if sys.platform == 'win32':
         print("Windows is currently not supported.")
         sys.exit(1)
