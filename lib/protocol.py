@@ -6,8 +6,12 @@ import asyncio
 import logging
 
 from enum import Enum, unique
+from typing import Tuple
 
 from . import sha256
+
+
+Address = Tuple[str, int]
 
 
 @unique
@@ -53,13 +57,13 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
 
-    def connection_made(self, transport):
+    def connection_made(self, transport) -> None:
         self.transport = transport
 
-    def error_received(self, exc):
+    def error_received(self, exc) -> None:
         logging.info('error received: %s', exc)
 
-    def datagram_received(self, data, addr):
+    def datagram_received(self, data, addr) -> None:
         logging.debug('received %d bytes from %s', len(data), addr)
 
         # Packet should at least contain the packet hash (32 Bytes) and the
@@ -77,7 +81,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         self.handle_valid_packet(data[32:32 + 1], data[32 + 1:], addr)
 
-    def handle_valid_packet(self, ptype, data, addr):
+    def handle_valid_packet(self, ptype, data: bytes, addr: Address) -> None:
         """
         Handle valid packets by delegating them to the packet handling methods.
         """
@@ -98,7 +102,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         func = handle_methods.get(ptype, self.handle_invalid_packet)
         func(data, addr)
 
-    def handle_error(self, data, addr):
+    def handle_error(self, data: bytes, addr: Address) -> None:
         """
         Handle Error packets.
         Should by overwritten by the child class to handle this packet type.
@@ -106,7 +110,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Error from %s', addr)
         return
 
-    def handle_ack_error(self, data, addr):
+    def handle_ack_error(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Error packets.
         Should by overwritten by the child class to handle this packet type.
@@ -114,7 +118,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Error from %s', addr)
         return
 
-    def handle_client_hello(self, data, addr):
+    def handle_client_hello(self, data: bytes, addr: Address) -> None:
         """
         Handle Client_Hello packets.
         Should by overwritten by the child class to handle this packet type.
@@ -122,7 +126,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Client_Hello from %s', addr)
         return
 
-    def handle_server_hello(self, data, addr):
+    def handle_server_hello(self, data: bytes, addr: Address) -> None:
         """
         Handle Server_Hello packets.
         Should by overwritten by the child class to handle this packet type.
@@ -130,7 +134,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Server_Hello from %s', addr)
         return
 
-    def handle_file_metadata(self, data, addr):
+    def handle_file_metadata(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
@@ -138,7 +142,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received File_Metadata from %s', addr)
         return
 
-    def handle_ack_metadata(self, data, addr):
+    def handle_ack_metadata(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Metadata packets.
         Should by overwritten by the child class to handle this packet type.
@@ -146,7 +150,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Metadata from %s', addr)
         return
 
-    def handle_file_upload(self, data, addr):
+    def handle_file_upload(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Uplaod packets.
         Should by overwritten by the child class to handle this packet type.
@@ -154,7 +158,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received File_Upload from %s', addr)
         return
 
-    def handle_ack_upload(self, data, addr):
+    def handle_ack_upload(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Upload packets.
         Should by overwritten by the child class to handle this packet type.
@@ -162,7 +166,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Upload from %s', addr)
         return
 
-    def handle_file_delete(self, data, addr):
+    def handle_file_delete(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Delete packets.
         Should by overwritten by the child class to handle this packet type.
@@ -170,7 +174,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received File_Delete from %s', addr)
         return
 
-    def handle_ack_delete(self, data, addr):
+    def handle_ack_delete(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Delete packets.
         Should by overwritten by the child class to handle this packet type.
@@ -178,7 +182,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Delete from %s', addr)
         return
 
-    def handle_file_rename(self, data, addr):
+    def handle_file_rename(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Rename packets.
         Should by overwritten by the child class to handle this packet type.
@@ -186,7 +190,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received File_Rename from %s', addr)
         return
 
-    def handle_ack_rename(self, data, addr):
+    def handle_ack_rename(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Rename packets.
         Should by overwritten by the child class to handle this packet type.
@@ -194,7 +198,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Rename from %s', addr)
         return
 
-    def handle_invalid_packet(self, data, addr):
+    def handle_invalid_packet(self, data: bytes, addr: Address) -> None:
         """
         Handle invalid packets, such as with unknown packet types or invalid
         packet hashes.
@@ -202,7 +206,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         logging.warning('received and dropped invalid packet from %s', addr)
 
-    def send_error(self, filename, filehash, error_type, error_id, description=None, addr=None):
+    def send_error(self, filename: bytes, filehash: bytes, error_type,
+                   error_id: int, description=None, addr=None) -> int:
         """
         Pack and send an Error packet.
         """
@@ -219,7 +224,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, addr)
 
-    def send_ack_error(self, error_id, addr=None):
+    def send_ack_error(self, error_id, addr=None) -> int:
         """
         Pack and send an Ack_Error packet.
         """
@@ -343,7 +348,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, addr)
 
-    def send_ack_rename(self, filehash, old_filename, new_filename, addr=None):
+    def send_ack_rename(self, filehash: bytes, old_filename, new_filename, addr=None):
         """
         Pack and send a Ack_Rename packet.
         """
@@ -357,7 +362,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, addr)
 
-    def sendto(self, data, addr=None):
+    def sendto(self, data: bytes, addr=None) -> int:
         """
         Calculate and prepend a packet hash for the given data and send it as an
         UDP datagram.
@@ -373,7 +378,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         return len(data)
 
-    def unpack_filehash_and_name(self, data):
+    def unpack_filehash_and_name(self, data: bytes):
         """
         Unpack packet and extract a filehash (32 Bytes) and a file name of
         variable length (2 Bytes length determiner) + Bytes to store name.
@@ -404,7 +409,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         return (True, data, filehash, filename)
 
-    def unpack_error(self, data):
+    def unpack_error(self, data: bytes):
         """
         Unpack the Error packet from the given bytes (data).
         """
@@ -426,7 +431,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         return (True, filehash, filename, error_type, error_id, description)
 
-    def unpack_ack_error(self, data):
+    def unpack_ack_error(self, data: bytes):
         """
         Unpack the Ack_Error packet from the given bytes (data).
         """
@@ -436,7 +441,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         error_id = int.from_bytes(data, byteorder='big')
         return (True, error_id)
 
-    def unpack_client_hello(self, data):
+    def unpack_client_hello(self, data: bytes):
         """
         Unpack the Client_Hello packet from the given bytes (data).
         """
@@ -451,7 +456,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             "successfully parsed Client_Hello with ClientID %u", client_id)
         return (True, client_id)
 
-    def unpack_server_hello(self, data):
+    def unpack_server_hello(self, data: bytes):
         """
         Unpack the Server_Hello packet from the given bytes (data).
         """
@@ -476,7 +481,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         return (True, remote_files)
 
-    def unpack_file_metadata(self, data):
+    def unpack_file_metadata(self, data: bytes):
         """
         Unpack the File_Metadata packet from the given bytes (data).
         """
@@ -503,7 +508,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          filename, sha256.hex(filehash), filesize, permissions, modified_at)
         return (True, filehash, filename, filesize, permissions, modified_at)
 
-    def unpack_ack_metadata(self, data):
+    def unpack_ack_metadata(self, data: bytes):
         """
         Unpack the Ack_Metadata packet from the given bytes (data).
         """
@@ -530,7 +535,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          filename, sha256.hex(filehash), upload_id, resume_at_byte)
         return (True, filehash, filename, upload_id, resume_at_byte)
 
-    def unpack_file_upload(self, data):
+    def unpack_file_upload(self, data: bytes):
         """
         Unpack the File_Upload packet from the given bytes (data).
         """
@@ -556,7 +561,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                      upload_id, payload_start_byte, len(payload))
         return (True, upload_id, payload_start_byte, payload)
 
-    def unpack_ack_upload(self, data):
+    def unpack_ack_upload(self, data: bytes):
         """
         Unpack the Ack_Upload packet from the given bytes (data).
         """
@@ -575,7 +580,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                      upload_id, acked_bytes)
         return (True, upload_id, acked_bytes)
 
-    def unpack_file_delete(self, data):
+    def unpack_file_delete(self, data: bytes):
         """
         Unpack the File_Delete packet from the given bytes (data).
         """
@@ -591,7 +596,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          filename, sha256.hex(filehash))
         return (True, filehash, filename)
 
-    def unpack_ack_delete(self, data):
+    def unpack_ack_delete(self, data: bytes):
         """
         Unpack the Ack_Delete packet from the given bytes (data).
         """
@@ -607,7 +612,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          filename, sha256.hex(filehash))
         return (True, filehash, filename)
 
-    def unpack_file_rename(self, data):
+    def unpack_file_rename(self, data: bytes):
         """
         Unpack the File_Rename packet from the given bytes (data).
         """
@@ -633,7 +638,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          old_filename, sha256.hex(filehash), new_filename)
         return (True, filehash, old_filename, new_filename)
 
-    def unpack_ack_rename(self, data):
+    def unpack_ack_rename(self, data: bytes):
         """
         Unpack the Ack_Rename packet from the given bytes (data).
         """
