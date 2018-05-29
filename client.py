@@ -9,6 +9,8 @@ import random
 import signal
 import logging
 
+from typing import Dict, Any
+
 import aiofiles
 
 from watchdog.observers import Observer
@@ -101,7 +103,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
-    def __get_fileinfo(self, file) -> None:
+    def __get_fileinfo(self, file) -> Dict[str, Any]:
         """
         Get meta information about the given file.
         """
