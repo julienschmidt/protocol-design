@@ -7,7 +7,6 @@ import functools
 import os
 import random
 import signal
-import stat
 import logging
 
 import aiofiles
@@ -109,9 +108,9 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         filepath = self.path + file
         statinfo = os.stat(filepath)
         filehash = sha256.hash_file(filepath)
-        size = statinfo[stat.ST_SIZE]
-        permissions = (statinfo[stat.ST_MODE] & 0o777)
-        modified_at = statinfo[stat.ST_MTIME]
+        size = statinfo.st_size
+        permissions = (statinfo.st_mode & 0o777)
+        modified_at = statinfo.st_mtime
 
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             logging.debug("Got file info of file %s. " +
