@@ -5,7 +5,7 @@
 * Python 3.5 or newer
 
 ### 3rd-party Packages:
-`pip3 install aiofiles watchdog`
+`python3 -m pip install -r requirements.txt`
 
 ## Usage:
 
