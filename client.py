@@ -102,7 +102,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
-    def __get_fileinfo(self, file):
+    def __get_fileinfo(self, file) -> None:
         """
         Get meta information about the given file.
         """
@@ -137,7 +137,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.stop()
 
     # UNIX Signals
-    def signal(self, signame):
+    def signal(self, signame) -> None:
         """
         UNIX signal handler.
         """
@@ -145,7 +145,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.stop()
 
     # State
-    def start(self):
+    def start(self) -> None:
         """
         Start client protocol by sending a Client_Hello.
         """
@@ -155,7 +155,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_client_hello(self.client_id)
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop the client.
         """
@@ -171,7 +171,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # stop the event loop
         self.loop.stop()
 
-    def __cancel_resend(self, register, key):
+    def __cancel_resend(self, register, key) -> bool:
         if key is None:
             callback_handle = register
             if callback_handle is None:
@@ -187,7 +187,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             del register[key]
             return True
 
-    def __cancel_upload(self, filename, filehash, cancel_metadata=True):
+    def __cancel_upload(self, filename, filehash, cancel_metadata=True) -> None:
         if cancel_metadata:
             self.__cancel_resend(self.pending_metadata_callbacks, filename)
         fileinfo = self.fileinfo.get(filename, None)
@@ -197,7 +197,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                 active_upload[1].cancel()
 
     # Packet Handlers
-    def handle_error(self, data, addr):
+    def handle_error(self, data, addr) -> None:
         logging.info('received Error from %s', addr)
         valid, filehash, filename, error_type, error_id, description = self.unpack_error(
             data)
@@ -216,9 +216,8 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             logging.error('unknown error')
 
         self.send_ack_error(error_id)
-        return
 
-    def handle_server_hello(self, data, addr):
+    def handle_server_hello(self, data, addr) -> None:
         valid, remote_files = self.unpack_server_hello(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
@@ -235,7 +234,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             elif fileinfo['filehash'] != remote_files[filename]:
                 self.loop.call_soon(self.update_file, filename, fileinfo)
 
-    def handle_ack_metadata(self, data, addr):
+    def handle_ack_metadata(self, data, addr) -> None:
         valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
             data)
         if not valid:
@@ -258,7 +257,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             filename, fileinfo, upload_id, resume_at_byte))
         self.active_uploads[filename] = (upload_id, upload_task)
 
-    def handle_ack_upload(self, data, addr):
+    def handle_ack_upload(self, data, addr) -> None:
         valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
@@ -272,7 +271,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             ack[1] = acked_bytes
             ack[0].set()  # notify about new ACK
 
-    def handle_ack_delete(self, data, addr):
+    def handle_ack_delete(self, data, addr) -> None:
         valid, filehash, filename = self.unpack_ack_delete(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
@@ -291,7 +290,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         print("Deleted file \"%s\" was acknowledged" % filename)
 
-    def handle_ack_rename(self, data, addr):
+    def handle_ack_rename(self, data, addr) -> None:
         valid, filehash, old_filename, new_filename = self.unpack_ack_rename(
             data)
         if not valid:
@@ -314,7 +313,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
               (old_filename, new_filename))
 
     # file sync methods
-    def upload_file(self, filename, fileinfo=None):
+    def upload_file(self, filename, fileinfo=None) -> None:
         """
         Upload the given file to server.
         """
@@ -341,7 +340,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
 
-    def delete_file(self, filename):
+    def delete_file(self, filename) -> None:
         """
         Delete the given file from the server.
         """
@@ -357,13 +356,13 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_file_delete(filehash, filename)
 
-    def update_file(self, filename, fileinfo=None):
+    def update_file(self, filename, fileinfo=None) -> None:
         """
         Update the given file on the server by uploading the new content.
         """
         self.upload_file(filename, fileinfo)
 
-    def move_file(self, old_filename, new_filename):
+    def move_file(self, old_filename, new_filename) -> None:
         """
         Move a file on the server by changing its path.
         """
@@ -380,7 +379,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_file_rename(filehash, old_filename, new_filename)
 
-    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte):
+    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte) -> None:
         """
         This coroutine reads chunks from the given file and sends it as
         File_Upload packets. It then waits for acknowledgment and resends
