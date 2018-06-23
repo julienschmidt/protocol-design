@@ -23,6 +23,7 @@ class PacketType(bytes, Enum):
     Ack_Error = b'\x01'
     Client_Hello = b'\x10'
     Server_Hello = b'\x11'
+    Client_File_Request = b'\x12'
     File_Metadata = b'\x20'
     Ack_Metadata = b'\x21'
     File_Upload = b'\x22'
@@ -54,6 +55,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     def __init__(self):
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
+        self.fetch_intercal = 5.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
 
@@ -90,6 +92,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             PacketType.Ack_Error: self.handle_ack_error,
             PacketType.Client_Hello: self.handle_client_hello,
             PacketType.Server_Hello: self.handle_server_hello,
+            PacketType.Client_File_Request: self.handle_client_file_request,
             PacketType.File_Metadata: self.handle_file_metadata,
             PacketType.Ack_Metadata: self.handle_ack_metadata,
             PacketType.File_Upload: self.handle_file_upload,
@@ -132,6 +135,14 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         Should by overwritten by the child class to handle this packet type.
         """
         logging.info('received Server_Hello from %s', addr)
+        return
+
+    def handle_client_file_request(self, data: bytes, addr: Address) -> None:
+        """
+        Handle Client_File_Request packets.
+        Should by overwritten by the child class to handle this packet type.
+        """
+        logging.info('received Client_File_Request from %s', addr)
         return
 
     def handle_file_metadata(self, data: bytes, addr: Address) -> None:
@@ -250,6 +261,19 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             data.extend(filehash)
             data.extend((len(filename)).to_bytes(2, byteorder='big'))
             data.extend(filename)
+        return self.sendto(data, addr)
+
+    def send_client_file_request(self, fileinfo, addr=None):
+        """
+        Pack and send a Client_File_Request packet.
+        """
+
+        filename, filehash = fileinfo.items()
+        data = bytearray(PacketType.Client_File_Request)
+        data.extend(filehash)
+        data.extend((len(filename)).to_bytes(2, byteorder='big'))
+        data.extend(filename)
+
         return self.sendto(data, addr)
 
     def send_file_metadata(self, filename, fileinfo, addr=None):

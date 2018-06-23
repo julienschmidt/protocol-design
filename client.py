@@ -156,6 +156,9 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_client_hello(self.client_id)
 
+        # Call Client Hallo repeatedly to get an update of the files on the server and react accordingly
+        self.loop.call_later(self.fetch_intercal, self.start)
+
     def stop(self) -> None:
         """
         Stop the client.
@@ -233,7 +236,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             if filename not in remote_files:
                 self.loop.call_soon(self.upload_file, filename, fileinfo)
             elif fileinfo['filehash'] != remote_files[filename]:
-                self.loop.call_soon(self.update_file, filename, fileinfo)
+                self.loop.call_soon(self.request_file, fileinfo)
 
     def handle_ack_metadata(self, data, addr) -> None:
         valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
@@ -362,6 +365,30 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         Update the given file on the server by uploading the new content.
         """
         self.upload_file(filename, fileinfo)
+
+    def delete_file(self, filename, fileinfo=None) -> None:
+        """
+        Request a given file on the server.
+        """
+
+        # Remove the file from the file system
+        if os.path.isfile(self.path + filename.decode("utf-8")):
+            os.remove(self.path + filename.decode("utf-8"))
+        else:
+            logging.warning("Could not remove file \"%s\"", filename)
+            return
+
+        # Remove the file from the internal fileinfo dict
+        del self.fileinfo[filename]
+
+        print("Deleted file \"%s\"" % filename)
+
+    def request_file(self, fileinfo) -> None:
+        """
+        Request a given file on the server.
+        """
+
+        self.send_client_file_request(fileinfo)
 
     def move_file(self, old_filename, new_filename) -> None:
         """
