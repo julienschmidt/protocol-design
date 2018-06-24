@@ -62,6 +62,19 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
                 "Client attempting login for unknown user '%s' in request %u", username, request_id)
             return
 
+        # resume old session, if still available:
+        if request_id in self.sessions:
+            session = self.sessions[request_id]
+            if session['username'] == username:
+                server_state = dict()
+                for filename, fileinfo in self.fileinfo.items():
+                    server_state[filename] = fileinfo["filehash"]
+
+                # respond with Current_Server_State
+                self.send_current_server_state(request_id, self.epoch, server_state, addr)
+                return
+
+
         salt, vkey, ukey = self.userinfo[username]
 
         logging.debug(
@@ -105,6 +118,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         self.sessions[session_id] = {
             'encryptor': encryptor,
             'nonce': 1,
+            'user': username
         }
 
         server_state = dict()
