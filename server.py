@@ -112,7 +112,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
             server_state[filename] = fileinfo["filehash"]
 
         # respond with Current_Server_State
-        self.send_current_server_state(session_id, server_state, addr)
+        self.send_current_server_state(session_id, self.epoch, server_state, addr)
 
     def handle_ack_error(self, session_id, data, addr):
         valid, error_id = self.unpack_ack_error(data)
@@ -137,13 +137,14 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         logging.debug(
             'Client requested update (epoch: %d)', epoch)
 
-        # TODO: only sent filelist if changes since last epoch
         server_state = dict()
-        for filename, fileinfo in self.fileinfo.items():
-            server_state[filename] = fileinfo["filehash"]
+        # only sent filelist if changes since last epoch
+        if self.epoch > epoch:
+            for filename, fileinfo in self.fileinfo.items():
+                server_state[filename] = fileinfo["filehash"]
 
         # respond with Current_Server_State
-        self.send_current_server_state(session_id, server_state, addr)
+        self.send_current_server_state(session_id, self.epoch, server_state, addr)
 
     def handle_client_file_request(self, session_id, data, addr) -> None:
         valid, filehash, filename = self.unpack_client_file_request(data)
@@ -185,6 +186,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
 
         # Remove the file from the internal fileinfo dict
         del self.fileinfo[filename]
+        self.epoch += 1
 
         print("Deleted file \"%s\"" % filename)
 
@@ -212,6 +214,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         fileinfo = self.fileinfo[old_filename]
         del self.fileinfo[old_filename]
         self.fileinfo[new_filename] = fileinfo
+        self.epoch += 1
 
         print("Renamed/Moved file \"%s\" to \"%s\"" %
               (old_filename, new_filename))

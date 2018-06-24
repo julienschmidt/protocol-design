@@ -779,11 +779,12 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, session_id, addr)
 
-    def send_current_server_state(self, session_id: int, fileinfos, addr=None):
+    def send_current_server_state(self, session_id: int, epoch: int, fileinfos, addr=None):
         """
         Pack and send a Current_Server_State packet.
         """
         data = bytearray(PacketType.Current_Server_State)
+        data.extend(epoch.to_bytes(8, byteorder='big'))
         for filename, filehash in fileinfos.items():
             data.extend(filehash)
             data.extend((len(filename)).to_bytes(2, byteorder='big'))
@@ -1144,25 +1145,32 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         Unpack the Current_Server_State packet from the given bytes (data).
         """
 
+        if len(data) < 8:
+            logging.error("Current_Server_State did not have valid length")
+            return (False, None, None)
+
+        epoch = int.from_bytes(data[:8], byteorder='big')
+        data = data[8:]
+
         remote_files = {}
         while len(data) > 2 + 32:  # Min 2 Bytes for file filename_len and 32 Bytes for Hash
             valid, data, filehash, filename = self.unpack_filehash_and_name(
                 data)
             if not valid:
-                return (False, None)
+                return (False, None, None)
             remote_files[filename] = filehash
 
         if data:
             logging.error("Current_Server_State did not have valid length, "
                           "there is data left after parsing all files")
-            return (False, {})
+            return (False, None, None)
 
         if logging.getLogger().isEnabledFor(logging.INFO):
             logging.info("successfully parsed Current_Server_State:")
             for filename, filehash in remote_files.items():
                 logging.info("%s: %s", filename, sha256.hex(filehash))
 
-        return (True, remote_files)
+        return (True, epoch, remote_files)
 
     def unpack_client_file_request(self, data: bytes):
         """
@@ -1697,6 +1705,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         self.set_metadata(
             filepath, upload['permissions'], upload['modified_at'])
+        self.epoch += 1
 
         print("finished upload of file \"%s\"" % filename)
 
@@ -1870,6 +1879,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             'permissions': upload['permissions'],
             'modified_at': upload['modified_at'],
         }
+        self.epoch += 1
 
         print("finished update of file \"%s\"" % filename)
 
@@ -1991,6 +2001,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             return
 
         del self.active_uploads[filename]
+        self.epoch += 1
         print("Update of file \"%s\" was finished" % filename)
 
     async def do_upload(self, session_id, filename, fileinfo, upload_id, resume_at_byte, addr) -> None:
@@ -2081,6 +2092,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             return
 
         del self.active_uploads[filename]
+        self.epoch += 1
         print("Upload of file \"%s\" was finished" % filename)
 
     def resend_chunks(self, session_id: int, expired_chunks, upload_id: int, chunk_buffer, addr):

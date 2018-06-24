@@ -84,7 +84,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         print()
 
         # Set fetch update interval
-        self.fetch_intercal = 10.0
+        self.fetch_intercal = 10.0 # should be ~ 30s in production
         self.pending_update_callback = None
 
         self.username = username
@@ -265,7 +265,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             request_id, proof, self.seed, self.username.encode('utf-8'), token)
 
     def handle_current_server_state(self, session_id, data, addr) -> None:
-        valid, remote_files = self.unpack_current_server_state(data)
+        valid, epoch, remote_files = self.unpack_current_server_state(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
@@ -273,6 +273,14 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # cancel resend
         if not self.cancel_resend(self.pending_update_callback, None):
             return
+
+        # nothing new
+        if self.epoch == epoch:
+            # Call update() repeatedly to get an update of the files on the server
+            # and react accordingly
+            self.loop.call_later(self.fetch_intercal, self.update)
+            return
+        self.epoch = epoch
 
         # build file dir diff
         for filename, fileinfo in self.fileinfo.items():
@@ -294,7 +302,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                     self.remove_local_file(filename)
 
         for remote_filename, remote_filehash in remote_files.items():
-            if remote_filename not in self.fileinfo.keys() or self.fileinfo[remote_filename]['filehash'] is not remote_filehash:
+            if remote_filename not in self.fileinfo.keys() or self.fileinfo[remote_filename]['filehash'] != remote_filehash:
                 # If after renaming and removing files that might have changed on the server
                 # we check of any of the remote files still is not present on the client or is
                 # present but has a different hash and if so we assume that the file must be
