@@ -91,7 +91,7 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         self.assertTrue(valid)
         self.assertEqual(error_id, _error_id)
 
-    def test_client_hello(self):
+    def test_client_update_request(self):
         proto = TestProtocol()
 
         _session_id = 42
@@ -107,21 +107,23 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         self.assertTrue(valid)
         self.assertEqual(epoch, _epoch)
 
-    def test_server_hello(self):
+    def test_current_server_state(self):
         proto = TestProtocol()
 
         _session_id = 42
+        _epoch = 1337
         _fileinfos = {b'test1.py': b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                       b'test2.py': b'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}
-        proto.send_current_server_state(_session_id, _fileinfos)
+        proto.send_current_server_state(_session_id, _epoch, _fileinfos)
         self.assertFalse(proto.data is None)
         self.assertTrue(proto.addr is None)
         self.assertEqual(proto.session_id, _session_id)
         self.assertEqual(proto.data[0:1], PacketType.Current_Server_State)
 
-        valid, fileinfos = proto.unpack_current_server_state(
+        valid, epoch, fileinfos = proto.unpack_current_server_state(
             proto.data[1:])
         self.assertTrue(valid)
+        self.assertEqual(epoch, _epoch)
         self.assertEqual(fileinfos, _fileinfos)
 
     def test_file_metadata(self):
