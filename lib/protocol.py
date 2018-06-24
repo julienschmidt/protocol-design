@@ -3,17 +3,26 @@ Base for scsync protocol implementations.
 """
 
 import asyncio
+import errno
+import struct
+import hashlib
 import logging
 import os
-import struct
+import io
+import random
+import pyrsync2
+
+from shutil import move
+from tempfile import mkstemp
+
+import aiofiles
 
 from typing import Dict, Any
 from enum import Enum, unique
 from typing import Tuple
 from lib import files
-
-from . import sha256
-
+from lib import sha256
+from lib.buffer import ChunkRecvBuffer, ChunkSendBuffer
 
 Address = Tuple[str, int]
 
@@ -61,13 +70,15 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     """
     # pylint: disable=too-many-public-methods,no-self-use,unused-argument
 
-    def __init__(self, path):
+    def __init__(self, loop, path):
+        self.loop = loop
         self.path = path
 
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
+        self.max_buf_ahead = 4
 
         # stores the fileinfo for the local files
         self.fileinfo = dict()
@@ -77,6 +88,25 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         for file in local_files:
             filename = file.encode('utf8')
             self.fileinfo[filename] = self.get_fileinfo(file)
+
+        # Handle error callbacks and use to resend if no ack was recieved
+        self.pending_error_callbacks = dict()
+
+        # maps upload IDs to in-progress file uploads
+        self.uploads = dict()
+
+        # maps filenames to assigned upload IDs, used to check for conflicts and
+        # to resume uploads
+        self.active_uploads = dict()
+
+        # Dictionaries for checking ir ack/responses are pending
+        self.pending_upload_acks = dict()
+        self.pending_hello_callback = None
+        self.pending_metadata_callbacks = dict()
+        self.pending_delete_callbacks = dict()
+        self.pending_rename_callbacks = dict()
+
+    # File Handling
 
     def get_fileinfo(self, file) -> Dict[str, Any]:
         """
@@ -99,6 +129,15 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             'permissions': permissions,
             'modified_at': modified_at,
         }
+
+    def set_metadata(self, filepath, permissions, modified_at):
+        """
+        Set file metadata for the given file.
+        """
+        os.chmod(filepath, permissions)
+        os.utime(filepath, times=(modified_at, modified_at))
+
+    # Packet Management
 
     def connection_made(self, transport) -> None:
         self.transport = transport
@@ -193,50 +232,130 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     def handle_file_metadata(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Metadata packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can be overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Metadata from %s', addr)
-        return
+
+        valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        if filename in self.fileinfo and filehash == self.fileinfo[filename]["filehash"]:
+            # just adjust metadata, no reupload necessary
+            upload_id = 0
+            start_at = size
+            filepath = self.path + filename.decode('utf8')
+            self.set_metadata(filepath, permissions, modified_at)
+
+        else:
+            upload_id, start_at, error = self.init_upload(filehash, filename, size, permissions, modified_at)
+            if error:
+                self.communicate_error(filename, filehash, error, addr=addr)
+                return
+
+        self.send_ack_metadata(filehash, filename, upload_id, start_at, addr)
 
     def handle_ack_metadata(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Metadata packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Metadata from %s', addr)
-        return
+
+        valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        # cancel resend
+        if not self.cancel_resend(self.pending_metadata_callbacks, filename):
+            return
+
+        fileinfo = self.fileinfo[filename]
+        if fileinfo['size'] <= resume_at_byte:
+            # no further upload necessary
+            return
+        if fileinfo['filehash'] != filehash:
+            # file changed in the meantime
+            return
+
+        upload_task = self.loop.create_task(self.do_upload(
+            filename, fileinfo, upload_id, resume_at_byte))
+        self.active_uploads[filename] = (upload_id, upload_task)
 
     def handle_file_upload(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Uplaod packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Upload from %s', addr)
-        return
+
+        valid, upload_id, start_byte, payload = self.unpack_file_upload(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        upload = self.uploads.get(upload_id, None)
+        if upload is None:
+            return
+        chunk_queue = upload['chunk_queue']
+        chunk_queue.put_nowait((start_byte, payload, addr))
 
     def handle_file_update(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Update packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can by overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Update from %s', addr)
-        return
+
+        valid, update_id, start_byte, payload = self.unpack_file_update(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        upload = self.uploads.get(update_id, None)
+        if upload is None:
+            return
+        chunk_queue = upload['chunk_queue']
+        chunk_queue.put_nowait((start_byte, payload, addr))
 
     def handle_ack_upload(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Upload packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Upload from %s', addr)
-        return
+
+        valid, upload_id, acked_bytes = self.unpack_ack_upload(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        ack = self.pending_upload_acks.get(upload_id, None)
+        if ack is None:
+            return
+
+        if acked_bytes > ack[1]:
+            ack[1] = acked_bytes
+            ack[0].set()  # notify about new ACK
 
     def handle_ack_update(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Update packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Ack_Update from %s', addr)
-        return
+
+        valid, update_id, acked_bytes = self.unpack_ack_update(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        ack = self.pending_upload_acks.get(update_id, None)
+        if ack is None:
+            return
+
+        if acked_bytes > ack[1]:
+            ack[1] = acked_bytes
+            ack[0].set()  # notify about new ACK
 
     def handle_file_delete(self, data: bytes, addr: Address) -> None:
         """
@@ -281,18 +400,90 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     def handle_file_update_request(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Update_Request packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can be overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Update_Request from %s', addr)
-        return
+
+        valid, filehash, filename, filesize, permissions, modified_at = self.unpack_file_update_request(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+        # create new update entry and determine update_id
+        upload_id, start_at, error = self.init_update(
+            filehash, filename, filesize, permissions, modified_at)
+        if error:
+            self.communicate_error(filename, filehash, error, addr=addr)
+            return
+
+        # create checksums
+        file = open(self.path + filename.decode("utf-8"), "rb")
+        hashes = list(pyrsync2.blockchecksums(file, 16384))
+        file.close()
+
+        print("Update request received \"%s\"" % filename)
+        self.send_file_update_response(filename, upload_id, start_at, hashes, addr)
 
     def handle_file_update_response(self, data: bytes, addr: Address) -> None:
         """
         Handle File_Update_Response packets.
-        Should by overwritten by the child class to handle this packet type.
+        Can be overwritten by the child class to handle this packet type.
         """
-        logging.info('received File_Update_Response from %s', addr)
-        return
+
+        valid, filename, update_id, start_byte, checksums = self.unpack_file_update_response(data)
+
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        file = open(self.path + filename.decode("utf-8"), "rb")
+        delta = list(pyrsync2.rsyncdelta(file, checksums, 16384))
+        file.close()
+
+        # covert deta to bytearray encoded: len(4byte)|data(Xbyte), int fields added as len=0
+        data = bytes()
+        for i in range(0, len(delta)):
+            if isinstance(delta[i], int):
+                # ints are just appended by length
+                data += (0).to_bytes(4, byteorder='big')
+            else:
+                # data contained -> append
+                data += (len(delta[i])).to_bytes(4, byteorder='big')
+                data += delta[i]
+
+        # start send delta to serverd
+        self.upload_file_update(filename, update_id, start_byte, data)
+
+        print("Update response received \"%s\"" % filename)
+
+    def upload_file_update(self, filename, update_id, resume_at_byte, data) -> None:
+        print("Upload update of \"%s\"" % filename)
+
+        # cancel any active upload for the same file
+        active_update = self.active_uploads.get(filename, None)
+        if not active_update is None:
+            active_update[1].cancel()
+
+        # upload
+        update_task = self.loop.create_task(self.do_update(
+            filename, update_id, resume_at_byte, data))
+        self.active_uploads[filename] = (update_id, update_task)
+
+    def communicate_error(self, filename, filehash, error_type, description=None, error_id=None, addr=None):
+        if error_id is None:
+            while True:
+                error_id = random.getrandbits(32)
+                if error_id not in self.pending_error_callbacks:
+                    break
+
+        # schedule resend (canceled if ack'ed)
+        callback_handle = self.loop.call_later(
+            self.resend_delay, self.communicate_error,
+            filename, filehash, error_type, description, error_id, addr)
+        self.pending_error_callbacks[error_id] = callback_handle
+
+        logging.info('%s [%s]: %s %s', filename, sha256.hex(filehash),
+                     error_type, description)
+        self.send_error(filename, filehash, error_type,
+                        error_id, description, addr)
 
     def send_error(self, filename: bytes, filehash: bytes, error_type, error_id: int, description=None, addr=None) -> int:
         """
@@ -943,3 +1134,608 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             i +=24
 
         return (True, filename, update_id, resume_at_byte, checksums)
+
+    # File Upload Reciever Code
+
+    def gen_upload_id(self):
+        """
+        Generates a unique upload ID.
+        """
+        while True:
+            upload_id = random.getrandbits(32)
+            if upload_id not in self.uploads:
+                return upload_id
+
+    def cancel_resend(self, register, key) -> bool:
+        if key is None:
+            callback_handle = register
+            if callback_handle is None:
+                return False
+            callback_handle.cancel()
+            register = None
+            return True
+        else:
+            callback_handle = register.get(key, None)
+            if callback_handle is None:
+                return False
+            callback_handle.cancel()
+            del register[key]
+            return True
+
+    def init_upload(self, filehash, filename, size, permissions, modified_at):
+        """
+        Initialize a new file upload and return the assigned upload ID.
+        """
+
+        print("Receiving new file upload of file \"%s\" with size of %s bytes" % (
+            filename, size))
+
+        # check for existing upload to resume
+        if filename in self.active_uploads:
+            upload_id, _ = self.active_uploads[filename]
+            upload = self.uploads[upload_id]
+
+            if upload['filehash'] == filehash and upload['size'] == size:
+                # resume upload
+                upload['permissions'] = permissions
+                upload['modified_at'] = modified_at
+                start_at = upload['next_byte']
+                logging.info("resume upload at byte %u", start_at)
+                return (upload_id, start_at, None)
+
+            elif upload['modified_at'] >= modified_at:
+                # only accept newer files
+                return (0, 0, ErrorType.Conflict)
+
+        start_at = 0
+        upload_id = self.gen_upload_id()
+        upload = {
+            'filehash': filehash,
+            'filename': filename,
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
+
+            'tmpfile': mkstemp(),
+            'next_byte': 0,
+
+            # Queue to pass chunks to the receiver coroutine
+            'chunk_queue': asyncio.Queue(loop=self.loop),
+        }
+
+        upload_task = self.loop.create_task(
+            self.receive_upload(upload_id, upload))
+        self.uploads[upload_id] = upload
+        self.active_uploads[filename] = (upload_id, upload_task)
+
+        return (upload_id, start_at, None)
+
+    def init_update(self, filehash, filename, size, permissions, modified_at):
+        """
+        Initialize a new file upload and return the assigned upload ID.
+        """
+
+        print("Receiving new file update of file \"%s\" with size of %s bytes" % (
+            filename, size))
+
+        # check for existing upload to resume
+        if filename in self.active_uploads:
+            update_id, _ = self.active_uploads[filename]
+            upload = self.uploads[update_id]
+
+            if upload['filehash'] == filehash and upload['size'] == size:
+                # resume upload
+                upload['permissions'] = permissions
+                upload['modified_at'] = modified_at
+                start_at = upload['next_byte']
+                logging.info("resume update at byte %u", start_at)
+                return (update_id, start_at, None)
+
+            elif upload['modified_at'] >= modified_at:
+                # only accept newer files
+                return (0, 0, ErrorType.Conflict)
+
+        start_at = 0
+        update_id = self.gen_upload_id()
+        upload = {
+            'filehash': filehash,
+            'filename': filename,
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
+
+            'tmpfile': mkstemp(),
+            'next_byte': 0,
+
+            # Queue to pass chunks to the receiver coroutine
+            'chunk_queue': asyncio.Queue(loop=self.loop),
+        }
+
+        upload_task = self.loop.create_task(
+            self.receive_update(update_id, upload))
+        self.uploads[update_id] = upload
+        self.active_uploads[filename] = (update_id, upload_task)
+
+        return (update_id, start_at, None)
+
+    async def receive_upload(self, upload_id, upload):
+        """
+        This coroutine waits for incoming file chunks and writes them to the
+        temporary file. When the whole file has been received, the filehash
+        is verified before moving the file to the final destination and updating
+        the cached fileinfo.
+        """
+        size = upload['size']
+        tmpfile = upload['tmpfile'][1]
+        m = hashlib.sha256()
+        error = None
+        if size > 0:
+            try:
+                async with aiofiles.open(tmpfile, mode='wb', loop=self.loop) as f:
+                    chunk_queue = upload['chunk_queue']
+                    buffered_chunks = ChunkRecvBuffer(self.max_buf_ahead)
+                    pos = 0
+                    while pos < size:
+                        # TODO: add timeout
+                        start_byte, payload, addr = await chunk_queue.get()
+                        logging.debug("chunk %s, %s, %s", pos,
+                                      start_byte, len(payload))
+                        if start_byte != pos:
+                            if start_byte > pos:
+                                # ignore chunks with invalid start byte
+                                if start_byte > size:
+                                    continue
+
+                                # buffer chunks which can not be immediately
+                                # written
+                                buffered_chunks.put(start_byte, payload)
+                                continue
+
+                            # skip old data
+                            diff = pos - start_byte
+                            if diff > len(payload):
+                                continue
+                            payload = payload[diff:]
+
+                        pos += len(payload)
+
+                        # get max available consecutive byte when including
+                        # buffered chunks
+                        available, matching_chunks = buffered_chunks.max_available(
+                            pos)
+                        upload['next_byte'] = available
+
+                        # send ack with max available byte
+                        self.send_ack_upload(upload_id, available, addr)
+
+                        # update hash and write to file
+                        m.update(payload)
+                        await f.write(payload)
+
+                        # handle buffered chunks that can be written now
+                        while matching_chunks > 0:
+                            start_byte, payload = buffered_chunks.pop()
+
+                            # skip old data
+                            diff = pos - start_byte
+                            if diff > len(payload):
+                                continue
+                            payload = payload[diff:]
+
+                            pos += len(payload)
+                            m.update(payload)
+                            await f.write(payload)
+                            matching_chunks -= 1
+            except (asyncio.CancelledError, RuntimeError):
+                return
+            except IOError as e:
+                description = os.strerror(e.errno)
+                logging.error('IOError %u: %s', e.errno, description)
+                if e.errno in [errno.ENOSPC, errno.ENOMEM, errno.EFBIG]:
+                    error = (ErrorType.Out_Of_Memory, description)
+                else:
+                    error = (ErrorType.Upload_Failed, description)
+
+        filehash = m.digest()
+        filename = upload['filename']
+
+        del self.uploads[upload_id]
+        del self.active_uploads[filename]
+
+        if filehash != upload['filehash'] and error is None:
+            logging.error('filehash of file \"%s\" did not match!', filename)
+            error = (ErrorType.File_Hash_Error, "filehash does not match")
+
+        if error is not None:
+            os.remove(tmpfile)
+            self.communicate_error(filename, filehash, error[0], bytes(error[1]), None, addr)
+            return
+
+        # update cached fileinfo
+        self.fileinfo[filename] = {
+            'filehash': filehash,
+            'size': size,
+            'permissions': upload['permissions'],
+            'modified_at': upload['modified_at'],
+        }
+
+        filepath = self.path + filename.decode('utf8')
+        move(tmpfile, filepath)
+        self.set_metadata(
+            filepath, upload['permissions'], upload['modified_at'])
+
+        print("finished upload of file \"%s\"" % filename)
+
+    async def receive_update(self, upload_id, upload):
+        """
+        This coroutine waits for incoming update chunks and stores them in a byte array.
+        When the whole update delta information has been received, the filehash
+        is verified before updating the file to the final destination and updating
+        the cached fileinfo.
+        """
+        size = upload['size']
+        tmpfile = upload['tmpfile'][1]
+        error = None
+        data = b''
+        if size > 0:
+            try:
+
+                chunk_queue = upload['chunk_queue']
+                buffered_chunks = ChunkRecvBuffer(self.max_buf_ahead)
+                pos = 0
+                while pos < size:
+
+                    # TODO: add timeout
+                    start_byte, payload, addr = await chunk_queue.get()
+                    # if startbyte 0: update size
+                    if start_byte == 0:
+                        size = int.from_bytes(payload[0:8], byteorder='big')
+
+                    logging.debug("chunk %s, %s, %s", pos,
+                                  start_byte, len(payload))
+                    if start_byte != pos:
+                        if start_byte > pos:
+                            # ignore chunks with invalid start byte
+                            if start_byte > size:
+                                continue
+
+                            # buffer chunks which can not be immediately
+                            # written
+                            buffered_chunks.put(start_byte, payload)
+                            continue
+
+                        # skip old data
+                        diff = pos - start_byte
+                        if diff > len(payload):
+                            continue
+                        payload = payload[diff:]
+
+                    pos += len(payload)
+
+                    # get max available consecutive byte when including
+                    # buffered chunks
+                    available, matching_chunks = buffered_chunks.max_available(pos)
+                    upload['next_byte'] = available
+                    # send ack with max available byte
+                    self.send_ack_update(upload_id, available, addr)
+                    # add data
+                    data += payload
+                    # handle buffered chunks that can be written now
+                    while matching_chunks > 0:
+                        start_byte, payload = buffered_chunks.pop()
+
+                        # skip old data
+                        diff = pos - start_byte
+                        if diff > len(payload):
+                            continue
+                        payload = payload[diff:]
+
+                        pos += len(payload)
+                        data += payload
+                        matching_chunks -= 1
+            except (asyncio.CancelledError, RuntimeError):
+                return
+            except IOError as e:
+                description = os.strerror(e.errno)
+                logging.error('IOError %u: %s', e.errno, description)
+                if e.errno in [errno.ENOSPC, errno.ENOMEM, errno.EFBIG]:
+                    error = (ErrorType.Out_Of_Memory, description)
+                else:
+                    error = (ErrorType.Upload_Failed, description)
+
+        filename = upload['filename']
+
+        del self.uploads[upload_id]
+        del self.active_uploads[filename]
+
+        if error is not None:
+            os.remove(tmpfile)
+            self.communicate_error(filename, upload['filehash'], error[0], bytes(error[1]), None, addr)
+            return
+
+        # Process received data
+        # remove first 8 bytes: delta size
+        data = data[8:]
+        # remove 32 bytes: hash
+        upload_hash = data[:32]
+        data = data[32:]
+
+        # check
+        if sha256.hash(data) != upload_hash and error is None:
+            logging.error('deltahash for file \"%s\" did not match!', filename)
+            error = (ErrorType.File_Hash_Error, "deltahash does not match")
+
+        # generate delta list structure
+        i = 0
+        index_cnt = 0
+        delta_list = []
+        last_filled = False
+        while i < len(data):
+            checksum_length = int.from_bytes(data[i:i + 4], byteorder='big')
+            if checksum_length == 0:
+                # special case when i == 0, index used is 0, otherwise a non int has been before, therefore index++
+                if i == 0:
+                    delta_list.append(0)
+                else:
+                    index_cnt += 1
+                    delta_list.append(index_cnt)
+                i = i + 4
+                last_filled = False
+            else:
+                if not last_filled and i != 0:
+                    index_cnt += 1
+                    last_filled = True
+                else:
+                    # only for the i == 0 case important
+                    last_filled = True
+                # contains data, add the data
+                delta_list.append(data[i + 4:i + 4 + checksum_length])
+                i = i + 4 + checksum_length
+
+        # update
+        file = open(self.path + filename.decode("utf-8"), "rb")
+        file.seek(0)
+        save_to = open(tmpfile, "wb")
+        pyrsync2.patchstream(file, save_to, delta_list, 16384)
+        file.close()
+        save_to.close()
+
+        # check updated file size/hash
+        filehash = sha256.hash_file(tmpfile)
+        statinfo = os.stat(tmpfile)
+        size = statinfo.st_size
+
+        if filehash != upload['filehash'] and error is None:
+            logging.error('updated filehash for file \"%s\" did not match!', filename)
+            error = (ErrorType.File_Hash_Error, "updated hash does not match")
+
+        if size != upload['size'] and error is None:
+            logging.error('updated size for file \"%s\" did not match!', filename)
+            # TODO new error type for size missmatch (?)
+            error = (ErrorType.File_Hash_Error, "updated size does not match")
+
+        filepath = self.path + filename.decode('utf8')
+        move(tmpfile, filepath)
+        self.set_metadata(filepath, upload['permissions'], upload['modified_at'])
+
+        # update cached fileinfo
+        self.fileinfo[filename] = {
+            'filehash': filehash,
+            'size': size,
+            'permissions': upload['permissions'],
+            'modified_at': upload['modified_at'],
+        }
+
+        print("finished update of file \"%s\"" % filename)
+
+    # File Upload Sender Code
+    def upload_file(self, filename, fileinfo=None) -> None:
+        """
+        Upload the given file to server.
+        """
+        if fileinfo is None:
+            fileinfo = self.get_fileinfo(filename.decode('utf8'))
+            # prevent double uploads do to IO-notifications (e.g. create and
+            # modify)
+            existing_fileinfo = self.fileinfo.get(filename, None)
+            if existing_fileinfo is not None and existing_fileinfo == fileinfo:
+                return
+        self.fileinfo[filename] = fileinfo
+        print("Upload \"%s\"" % filename)
+
+        # cancel any active upload for the same file
+        active_upload = self.active_uploads.get(filename, None)
+        if active_upload is not None:
+            active_upload[1].cancel()
+
+        # schedule resend (canceled if ack'ed)
+        callback_handle = self.loop.call_later(
+            self.resend_delay, self.upload_file, filename)
+        self.pending_metadata_callbacks[filename] = callback_handle
+
+        # send file metadata
+        self.send_file_metadata(filename, fileinfo)
+
+    async def do_update(self, filename, update_id, resume_at_byte, data) -> None:
+        """
+        This coroutine sends update delta data as
+        File_Update packets. It then waits for acknowledgment and resends
+        the packet if the sent chunk is not acknowledged.
+        """
+        filepath = self.path + filename.decode('utf8')
+        size = len(data)
+        deltahash = sha256.hash(data)
+
+        # add size of the data (to update receiver thread) and hash
+        data = b''.join([size.to_bytes(8, byteorder='big'),
+            deltahash,
+            data])
+        try:
+            with io.BytesIO(data) as f:
+                buf_size = self.chunk_size
+
+                pos = 0
+                if 0 < resume_at_byte <= size:
+                    f.seek(pos)
+                    pos = resume_at_byte
+                ack = [asyncio.Event(loop=self.loop), pos]
+                self.pending_upload_acks[update_id] = ack
+                acked_bytes = pos
+                # buffer for sent but not yet acknowledged chunks
+                chunk_buffer = ChunkSendBuffer()
+                while acked_bytes < size:
+                    # TODO: `ahead` should be global
+                    while pos < size and chunk_buffer.length < self.max_send_ahead:
+                        logging.debug('reading chunk from pos %u', pos)
+                        # read chunk from file
+                        buf = f.read(buf_size)
+                        if not buf:
+                            return
+
+                        # send chunk
+                        self.send_file_update(update_id, pos, buf)
+                        expiry_time = self.loop.time() + self.resend_delay
+                        chunk_buffer.put(expiry_time, pos, buf)
+                        pos += len(buf)
+
+                        await asyncio.sleep(0.01)  # TODO: adjust to send rate
+
+                        # check status
+                        if ack[0].is_set():
+                            ack[0].clear()
+                            acked_bytes = ack[1]
+                            logging.debug('got acks until %u', acked_bytes)
+                            current_time = self.loop.time()
+                            expired_chunks = chunk_buffer.adjust(
+                                current_time, acked_bytes)
+                            if expired_chunks:
+                                self.resend_chunks(
+                                    expired_chunks, update_id, chunk_buffer)
+
+                    # wait blocking for ack
+                    current_time = self.loop.time()
+                    min_expiry_time = chunk_buffer.min_expiry_time()
+                    if min_expiry_time is None:
+                        continue
+                    timeout = min_expiry_time - current_time
+                    if timeout > 0:
+                        try:
+                            await asyncio.wait_for(ack[0].wait(),
+                                                   timeout=timeout,
+                                                   loop=self.loop)
+                        except asyncio.TimeoutError:
+                            pass
+                    ack[0].clear()
+                    acked_bytes = ack[1]
+                    logging.debug('got acks until %u', acked_bytes)
+                    expired_chunks = chunk_buffer.adjust(
+                        current_time, acked_bytes)
+                    if expired_chunks:
+                        self.resend_chunks(
+                            expired_chunks, update_id, chunk_buffer)
+
+        except RuntimeError:
+            return
+        except IOError as e:
+            description = os.strerror(e.errno)
+            logging.error('IOError %u: %s', e.errno, description)
+            del self.active_uploads[filename]
+            self.loop.call_soon(self.upload_file, filename, self.get_fileinfo(filename.decode('utf8')))
+            return
+
+        del self.active_uploads[filename]
+        print("Update of file \"%s\" was finished" % filename)
+
+    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte) -> None:
+        """
+        This coroutine reads chunks from the given file and sends it as
+        File_Upload packets. It then waits for acknowledgment and resends
+        the packet if the sent chunk is not acknowledged.
+        """
+        filepath = self.path + filename.decode('utf8')
+        size = fileinfo['size']
+        try:
+            async with aiofiles.open(filepath, mode='rb', loop=self.loop) as f:
+                buf_size = self.chunk_size
+
+                pos = 0
+                if 0 < resume_at_byte <= size:
+                    await f.seek(pos)
+                    pos = resume_at_byte
+
+                ack = [asyncio.Event(loop=self.loop), pos]
+                self.pending_upload_acks[upload_id] = ack
+                acked_bytes = pos
+
+                # buffer for sent but not yet acknowledged chunks
+                chunk_buffer = ChunkSendBuffer()
+                while acked_bytes < size:
+                    # TODO: `ahead` should be global
+                    while pos < size and chunk_buffer.length < self.max_send_ahead:
+                        logging.debug('reading chunk from pos %u', pos)
+                        # read chunk from file
+                        buf = await f.read(buf_size)
+                        if not buf:
+                            return
+
+                        # send chunk
+                        self.send_file_upload(upload_id, pos, buf)
+
+                        expiry_time = self.loop.time() + self.resend_delay
+                        chunk_buffer.put(expiry_time, pos, buf)
+                        pos += len(buf)
+
+                        await asyncio.sleep(0.01)  # TODO: adjust to send rate
+
+                        # check status
+                        if ack[0].is_set():
+                            ack[0].clear()
+                            acked_bytes = ack[1]
+                            logging.debug('got acks until %u', acked_bytes)
+                            current_time = self.loop.time()
+                            expired_chunks = chunk_buffer.adjust(
+                                current_time, acked_bytes)
+                            if expired_chunks:
+                                self.resend_chunks(
+                                    expired_chunks, upload_id, chunk_buffer)
+
+                    # wait blocking for ack
+                    current_time = self.loop.time()
+                    min_expiry_time = chunk_buffer.min_expiry_time()
+                    if min_expiry_time is None:
+                        continue
+                    timeout = min_expiry_time - current_time
+                    if timeout > 0:
+                        try:
+                            await asyncio.wait_for(ack[0].wait(),
+                                                   timeout=timeout,
+                                                   loop=self.loop)
+                        except asyncio.TimeoutError:
+                            pass
+                    ack[0].clear()
+                    acked_bytes = ack[1]
+                    logging.debug('got acks until %u', acked_bytes)
+                    expired_chunks = chunk_buffer.adjust(
+                        current_time, acked_bytes)
+                    if expired_chunks:
+                        self.resend_chunks(
+                            expired_chunks, upload_id, chunk_buffer)
+
+        except RuntimeError:
+            return
+        except IOError as e:
+            description = os.strerror(e.errno)
+            logging.error('IOError %u: %s', e.errno, description)
+            del self.active_uploads[filename]
+            self.loop.call_soon(self.upload_file, filename, fileinfo)
+            return
+
+        del self.active_uploads[filename]
+        print("Upload of file \"%s\" was finished" % filename)
+
+    def resend_chunks(self, expired_chunks, upload_id, chunk_buffer):
+        expiry_time = self.loop.time() + self.resend_delay
+        for chunk in expired_chunks:
+            logging.info("resending chunk starting at byte %u", chunk[1])
+            self.send_file_upload(upload_id, chunk[1], chunk[2])
+            chunk_buffer.put(expiry_time, chunk[1], chunk[2])
