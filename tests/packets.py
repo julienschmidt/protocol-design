@@ -90,7 +90,7 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         proto.send_client_hello(_client_id)
         self.assertFalse(proto.data is None)
         self.assertTrue(proto.addr is None)
-        self.assertEqual(proto.data[0:1], PacketType.Client_Hello)
+        self.assertEqual(proto.data[0:1], PacketType.Client_Update_Request)
 
         valid, client_id = proto.unpack_client_hello(
             proto.data[1:])
@@ -106,7 +106,7 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         proto.send_server_hello(_fileinfos)
         self.assertFalse(proto.data is None)
         self.assertTrue(proto.addr is None)
-        self.assertEqual(proto.data[0:1], PacketType.Server_Hello)
+        self.assertEqual(proto.data[0:1], PacketType.Current_Server_State)
 
         valid, fileinfos = proto.unpack_server_hello(
             proto.data[1:])

@@ -87,15 +87,15 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         del self.pending_error_callbacks[error_id]
         return
 
-    def handle_client_hello(self, data, addr):
+    def handle_client_update_request(self, data, addr):
         valid, client_id = self.unpack_client_hello(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
 
-        print('Client wants to connect with clientID:', client_id)
+        logging.debug('Client with clientID \"%s\" requested update', client_id)
 
-        # respond with Server_Hello
+        # respond with Current_Server_State
         self.send_server_hello(self.fileinfo, addr)
 
     def handle_file_metadata(self, data, addr):

@@ -21,8 +21,8 @@ class PacketType(bytes, Enum):
     """
     Error = b'\x00'
     Ack_Error = b'\x01'
-    Client_Hello = b'\x10'
-    Server_Hello = b'\x11'
+    Client_Update_Request = b'\x10'
+    Current_Server_State = b'\x11'
     Client_File_Request = b'\x12'
     File_Metadata = b'\x20'
     Ack_Metadata = b'\x21'
@@ -55,7 +55,6 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     def __init__(self):
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
-        self.fetch_intercal = 5.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
 
@@ -90,8 +89,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         handle_methods = {
             PacketType.Error: self.handle_error,
             PacketType.Ack_Error: self.handle_ack_error,
-            PacketType.Client_Hello: self.handle_client_hello,
-            PacketType.Server_Hello: self.handle_server_hello,
+            PacketType.Client_Update_Request: self.handle_client_update_request,
+            PacketType.Current_Server_State: self.handle_current_server_state,
             PacketType.Client_File_Request: self.handle_client_file_request,
             PacketType.File_Metadata: self.handle_file_metadata,
             PacketType.Ack_Metadata: self.handle_ack_metadata,
@@ -121,20 +120,20 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received Ack_Error from %s', addr)
         return
 
-    def handle_client_hello(self, data: bytes, addr: Address) -> None:
+    def handle_client_update_request(self, data: bytes, addr: Address) -> None:
         """
-        Handle Client_Hello packets.
+        Handle Client_Update_Request packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Client_Hello from %s', addr)
+        logging.info('received Client_Update_Request from %s', addr)
         return
 
-    def handle_server_hello(self, data: bytes, addr: Address) -> None:
+    def handle_current_server_state(self, data: bytes, addr: Address) -> None:
         """
-        Handle Server_Hello packets.
+        Handle Current_Server_State packets.
         Should by overwritten by the child class to handle this packet type.
         """
-        logging.info('received Server_Hello from %s', addr)
+        logging.info('received Current_Server_State from %s', addr)
         return
 
     def handle_client_file_request(self, data: bytes, addr: Address) -> None:
@@ -247,28 +246,27 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
     def send_client_hello(self, client_id, addr=None):
         """
-        Pack and send a Client_Hello packet.
+        Pack and send a Client_Update_Request packet.
         """
-        data = PacketType.Client_Hello + client_id.to_bytes(8, byteorder='big')
+        data = PacketType.Client_Update_Request + client_id.to_bytes(8, byteorder='big')
         return self.sendto(data, addr)
 
     def send_server_hello(self, fileinfos, addr=None):
         """
-        Pack and send a Server_Hello packet.
+        Pack and send a Current_Server_State packet.
         """
-        data = bytearray(PacketType.Server_Hello)
+        data = bytearray(PacketType.Current_Server_State)
         for filename, filehash in fileinfos.items():
             data.extend(filehash)
             data.extend((len(filename)).to_bytes(2, byteorder='big'))
             data.extend(filename)
         return self.sendto(data, addr)
 
-    def send_client_file_request(self, fileinfo, addr=None):
+    def send_client_file_request(self, filename, filehash, addr=None):
         """
         Pack and send a Client_File_Request packet.
         """
 
-        filename, filehash = fileinfo.items()
         data = bytearray(PacketType.Client_File_Request)
         data.extend(filehash)
         data.extend((len(filename)).to_bytes(2, byteorder='big'))
@@ -467,22 +465,22 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
     def unpack_client_hello(self, data: bytes):
         """
-        Unpack the Client_Hello packet from the given bytes (data).
+        Unpack the Client_Update_Request packet from the given bytes (data).
         """
 
         if len(data) != 8:
-            logging.error("Client_Hello didn't have a valid length to parse")
+            logging.error("Client_Update_Request didn't have a valid length to parse")
             return (False, None)
 
         client_id = int.from_bytes(data, byteorder='big')
 
         logging.info(
-            "successfully parsed Client_Hello with ClientID %u", client_id)
+            "successfully parsed Client_Update_Request with ClientID %u", client_id)
         return (True, client_id)
 
     def unpack_server_hello(self, data: bytes):
         """
-        Unpack the Server_Hello packet from the given bytes (data).
+        Unpack the Current_Server_State packet from the given bytes (data).
         """
 
         remote_files = {}
@@ -494,12 +492,12 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             remote_files[filename] = filehash
 
         if data:
-            logging.error("Server_Hello did not have valid length, "
+            logging.error("Current_Server_State did not have valid length, "
                           "there is data left after parsing all files")
             return (False, {})
 
         if logging.getLogger().isEnabledFor(logging.INFO):
-            logging.info("successfully parsed Server_Hello:")
+            logging.info("successfully parsed Current_Server_State:")
             for filename, filehash in remote_files.items():
                 logging.info("%s: %s", filename, sha256.hex(filehash))
 

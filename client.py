@@ -78,6 +78,9 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.loop = loop
         self.path = path
 
+        # Set fetch update interval
+        self.fetch_intercal = 2.5
+
         # generate client ID
         self.client_id = random.getrandbits(64)
         print("ClientID:", self.client_id)
@@ -129,9 +132,9 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
     def connection_made(self, transport):
         super().connection_made(transport)
 
-        # workaround to make start() execute after
+        # workaround to make update() execute after
         # loop.run_until_complete(connect) returned
-        self.loop.call_later(0.001, self.start)
+        self.loop.call_later(0.001, self.update)
 
     def connection_lost(self, exc):
         print("Socket closed, stop the event loop")
@@ -146,18 +149,15 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.stop()
 
     # State
-    def start(self) -> None:
+    def update(self) -> None:
         """
-        Start client protocol by sending a Client_Hello.
+        Start client protocol by sending a Client_Update_Request.
         """
-        # schedule resend (canceled if Server_Hello received)
-        callback_handle = self.loop.call_later(self.resend_delay, self.start)
+        # schedule resend (canceled if Current_Server_State received)
+        callback_handle = self.loop.call_later(self.resend_delay, self.update)
         self.pending_hello_callback = callback_handle
 
         self.send_client_hello(self.client_id)
-
-        # Call Client Hallo repeatedly to get an update of the files on the server and react accordingly
-        # self.loop.call_later(self.fetch_intercal, self.start)
 
     def stop(self) -> None:
         """
@@ -218,6 +218,27 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         print("Deleted file \"%s\"" % filename)
 
+    def rename_local_file(self, old_filename, new_filename) -> None:
+        """
+        Rename a local file
+        """
+
+        # Rename the file from the file system
+        if os.path.isfile(self.path + old_filename.decode("utf-8")):
+            os.renames(self.path + old_filename.decode("utf-8"),
+                       self.path + new_filename.decode("utf-8"))
+        else:
+            logging.warning("Could not rename \"%s\" to \"%s\"", old_filename, new_filename)
+            return
+
+        # Remove the old reference from the internal fileinfo dict and add a
+        # new one for the new_filename
+        filehash = self.fileinfo[old_filename]
+        del self.fileinfo[old_filename]
+        self.fileinfo[new_filename] = filehash
+
+        print("Renamed/Moved file \"%s\" to \"%s\"" %(old_filename, new_filename))
+
     # Packet Handlers
     def handle_error(self, data, addr) -> None:
         logging.info('received Error from %s', addr)
@@ -239,7 +260,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_ack_error(error_id)
 
-    def handle_server_hello(self, data, addr) -> None:
+    def handle_current_server_state(self, data, addr) -> None:
         valid, remote_files = self.unpack_server_hello(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
@@ -252,9 +273,25 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # build file dir diff
         for filename, fileinfo in self.fileinfo.items():
             if filename not in remote_files:
-                self.loop.call_soon(self.remove_local_file, filename, fileinfo)
+                new_file_name = None
+                for remote_file_name in remote_files.keys():
+                    if remote_files[remote_file_name] == fileinfo['filehash']:
+                        new_file_name = remote_file_name
+
+                if new_file_name != None:
+                    # If the local file hash can be found in the remote files but the name is different, we assume a
+                    # we assume it has been renamed by an other client --> Rename local copy
+                    self.loop.call_soon(self.rename_local_file, filename, new_file_name)
+                else:
+                    # If local file is not in remote files and there is no suiting hash (possible rename)
+                    # we assume it has been deleted by an other client --> Remove local copy
+                    self.loop.call_soon(self.remove_local_file, filename)
             elif fileinfo['filehash'] != remote_files[filename]:
+                # If filehash is not equal we assume an other client has updated the file and we request the new file
                 self.loop.call_soon(self.request_file, fileinfo)
+
+        # Call update() repeatedly to get an update of the files on the server and react accordingly
+        self.loop.call_later(self.fetch_intercal, self.update)
 
     def handle_ack_metadata(self, data, addr) -> None:
         valid, filehash, filename, upload_id, resume_at_byte = self.unpack_ack_metadata(
@@ -362,14 +399,18 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
 
-    def delete_file(self, filename, fileinfo=None) -> None:
+    def delete_file(self, filename) -> None:
         """
         Delete the given file from the server.
         """
+
+        # Check if the file was not deleted by the client program itself.
+        if not (filename in self.fileinfo.keys()):
+            return
+
         print("Deleted file \"%s\"" % filename)
 
-        fileinfo = self.fileinfo[filename]
-        filehash = fileinfo["filehash"]
+        filehash = self.fileinfo[filename]["filehash"]
 
         # schedule resend (canceled if ack'ed)
         callback_handle = self.loop.call_later(
@@ -384,17 +425,23 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         """
         self.upload_file(filename, fileinfo)
 
-    def request_file(self, fileinfo) -> None:
+    def request_file(self, filename, filehash) -> None:
         """
         Request a given file on the server.
         """
 
-        self.send_client_file_request(fileinfo)
+        logging.debug("Request file \"%s\" with hash: %s", filename, filehash)
+
+        self.send_client_file_request(filename, filehash)
 
     def move_file(self, old_filename, new_filename) -> None:
         """
         Move a file on the server by changing its path.
         """
+
+        # Check if the file was not renamed/moved by the client program itself.
+        if not (old_filename in self.fileinfo.keys()):
+            return
 
         print("Renamed/Moved file \"%s\" to \"%s\"" %
               (old_filename, new_filename))
