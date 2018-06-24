@@ -193,7 +193,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         if error_type == ErrorType.File_Hash_Error:
             print('reuploading file \"%s\"' % filename.decode('utf8'))
-            self.loop.call_soon(self.upload_file, filename)
+            self.loop.call_soon(self.upload_file, filename, addr)
         elif error_type in [ErrorType.Out_Of_Memory, ErrorType.Conflict, ErrorType.Upload_Failed]:
             self.__cancel_upload(filename, filehash)
         else:
@@ -233,7 +233,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                 # If after renaming and removing files that might have changed on the server
                 # we check of any of the remote files still is not present on the client and if so
                 # we assume that the file must be requested from the server using a request_file packet
-                self.loop.call_soon(self.request_file, remote_filename, remote_filehash)
+                self.loop.call_soon(self.request_file, remote_filename, remote_filehash, addr)
 
         # Call update() repeatedly to get an update of the files on the server and react accordingly
         self.loop.call_later(self.fetch_intercal, self.update)
@@ -314,14 +314,14 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
 
         self.send_file_update_request(filename, self.fileinfo[filename])
 
-    def request_file(self, filename, filehash) -> None:
+    def request_file(self, filename, filehash, addr) -> None:
         """
         Request a given file on the server.
         """
 
         logging.debug("Request file \"%s\" with hash: %s", filename, filehash)
 
-        self.send_client_file_request(filename, filehash)
+        self.send_client_file_request(filename, filehash, addr)
 
     def move_file(self, old_filename, new_filename) -> None:
         """

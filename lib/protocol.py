@@ -268,19 +268,19 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             return
 
         # cancel resend
-        if not self.cancel_resend(self.pending_metadata_callbacks, filename):
-            return
+        # if not self.cancel_resend(self.pending_metadata_callbacks, filename):
+        #     print("EROOR: Cancel Resend")
+        #     return
 
         fileinfo = self.fileinfo[filename]
         if fileinfo['size'] <= resume_at_byte:
-            # no further upload necessary
+            logging.debug("No further upload necessary")
             return
         if fileinfo['filehash'] != filehash:
-            # file changed in the meantime
+            logging.error("File changed in the meantime, filehash not the same!")
             return
 
-        upload_task = self.loop.create_task(self.do_upload(
-            filename, fileinfo, upload_id, resume_at_byte))
+        upload_task = self.loop.create_task(self.do_upload(filename, fileinfo, upload_id, resume_at_byte, addr))
         self.active_uploads[filename] = (upload_id, upload_task)
 
     def handle_file_upload(self, data: bytes, addr: Address) -> None:
@@ -450,11 +450,11 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                 data += delta[i]
 
         # start send delta to serverd
-        self.upload_file_update(filename, update_id, start_byte, data)
+        self.upload_file_update(filename, update_id, start_byte, data, addr)
 
         print("Update response received \"%s\"" % filename)
 
-    def upload_file_update(self, filename, update_id, resume_at_byte, data) -> None:
+    def upload_file_update(self, filename, update_id, resume_at_byte, data, addr) -> None:
         print("Upload update of \"%s\"" % filename)
 
         # cancel any active upload for the same file
@@ -463,8 +463,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             active_update[1].cancel()
 
         # upload
-        update_task = self.loop.create_task(self.do_update(
-            filename, update_id, resume_at_byte, data))
+        update_task = self.loop.create_task(self.do_update(filename, update_id, resume_at_byte, data, addr))
         self.active_uploads[filename] = (update_id, update_task)
 
     def communicate_error(self, filename, filehash, error_type, description=None, error_id=None, addr=None):
@@ -1529,7 +1528,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         print("finished update of file \"%s\"" % filename)
 
     # File Upload Sender Code
-    def upload_file(self, filename, fileinfo=None) -> None:
+    def upload_file(self, filename, fileinfo=None, addr=None) -> None:
         """
         Upload the given file to server.
         """
@@ -1549,14 +1548,13 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             active_upload[1].cancel()
 
         # schedule resend (canceled if ack'ed)
-        callback_handle = self.loop.call_later(
-            self.resend_delay, self.upload_file, filename)
+        callback_handle = self.loop.call_later(self.resend_delay, self.upload_file, filename, fileinfo, addr)
         self.pending_metadata_callbacks[filename] = callback_handle
 
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
 
-    async def do_update(self, filename, update_id, resume_at_byte, data) -> None:
+    async def do_update(self, filename, update_id, resume_at_byte, data, addr) -> None:
         """
         This coroutine sends update delta data as
         File_Update packets. It then waits for acknowledgment and resends
@@ -1593,7 +1591,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                             return
 
                         # send chunk
-                        self.send_file_update(update_id, pos, buf)
+                        self.send_file_update(update_id, pos, buf, addr)
                         expiry_time = self.loop.time() + self.resend_delay
                         chunk_buffer.put(expiry_time, pos, buf)
                         pos += len(buf)
@@ -1609,8 +1607,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                             expired_chunks = chunk_buffer.adjust(
                                 current_time, acked_bytes)
                             if expired_chunks:
-                                self.resend_chunks(
-                                    expired_chunks, update_id, chunk_buffer)
+                                self.resend_chunks(expired_chunks, update_id, chunk_buffer, addr)
 
                     # wait blocking for ack
                     current_time = self.loop.time()
@@ -1631,8 +1628,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                     expired_chunks = chunk_buffer.adjust(
                         current_time, acked_bytes)
                     if expired_chunks:
-                        self.resend_chunks(
-                            expired_chunks, update_id, chunk_buffer)
+                        self.resend_chunks(expired_chunks, update_id, chunk_buffer, addr)
 
         except RuntimeError:
             return
@@ -1640,13 +1636,13 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             description = os.strerror(e.errno)
             logging.error('IOError %u: %s', e.errno, description)
             del self.active_uploads[filename]
-            self.loop.call_soon(self.upload_file, filename, self.get_fileinfo(filename.decode('utf8')))
+            self.loop.call_soon(self.upload_file, filename, self.get_fileinfo(filename.decode('utf8'), addr))
             return
 
         del self.active_uploads[filename]
         print("Update of file \"%s\" was finished" % filename)
 
-    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte) -> None:
+    async def do_upload(self, filename, fileinfo, upload_id, resume_at_byte, addr) -> None:
         """
         This coroutine reads chunks from the given file and sends it as
         File_Upload packets. It then waits for acknowledgment and resends
@@ -1679,7 +1675,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                             return
 
                         # send chunk
-                        self.send_file_upload(upload_id, pos, buf)
+                        self.send_file_upload(upload_id, pos, buf, addr=addr)
 
                         expiry_time = self.loop.time() + self.resend_delay
                         chunk_buffer.put(expiry_time, pos, buf)
@@ -1696,8 +1692,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                             expired_chunks = chunk_buffer.adjust(
                                 current_time, acked_bytes)
                             if expired_chunks:
-                                self.resend_chunks(
-                                    expired_chunks, upload_id, chunk_buffer)
+                                self.resend_chunks(expired_chunks, upload_id, chunk_buffer, addr)
 
                     # wait blocking for ack
                     current_time = self.loop.time()
@@ -1718,8 +1713,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                     expired_chunks = chunk_buffer.adjust(
                         current_time, acked_bytes)
                     if expired_chunks:
-                        self.resend_chunks(
-                            expired_chunks, upload_id, chunk_buffer)
+                        self.resend_chunks(expired_chunks, upload_id, chunk_buffer, addr)
 
         except RuntimeError:
             return
@@ -1727,15 +1721,15 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             description = os.strerror(e.errno)
             logging.error('IOError %u: %s', e.errno, description)
             del self.active_uploads[filename]
-            self.loop.call_soon(self.upload_file, filename, fileinfo)
+            self.loop.call_soon(self.upload_file, filename, fileinfo, addr)
             return
 
         del self.active_uploads[filename]
         print("Upload of file \"%s\" was finished" % filename)
 
-    def resend_chunks(self, expired_chunks, upload_id, chunk_buffer):
+    def resend_chunks(self, expired_chunks, upload_id, chunk_buffer, addr):
         expiry_time = self.loop.time() + self.resend_delay
         for chunk in expired_chunks:
             logging.info("resending chunk starting at byte %u", chunk[1])
-            self.send_file_upload(upload_id, chunk[1], chunk[2])
+            self.send_file_upload(upload_id, chunk[1], chunk[2], addr=addr)
             chunk_buffer.put(expiry_time, chunk[1], chunk[2])
