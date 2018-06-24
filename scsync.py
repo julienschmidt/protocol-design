@@ -45,9 +45,13 @@ def main():
                         default=5000, type=int, help='port number')
     parser.add_argument('-f', dest='path', action='store',
                         default=os.getcwd(), help='directory path containing files')
+    parser.add_argument('-cc', dest='cc', action='store',
+                        default=100, type=int, help='packets per second')
 
-    parser.add_argument('-cc', dest='packets_per_second', action='store',
-                        default=100, help='packets per second')
+    parser.add_argument('-u', dest='user', action='store',
+                        default='', help='client username')
+    parser.add_argument('-pass', dest='password', action='store',
+                        default='', help='client user password')
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--verbose', dest='verbose', action='store_true',

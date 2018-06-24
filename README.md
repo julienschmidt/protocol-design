@@ -22,6 +22,8 @@ For each user a password hash and salt have to be generated using the `tools/gen
 
 The credentials are then stored as CSV using the format `<username>,<salt>,<verification_key>` in the `users.csv`.
 
+**ATTENTION**: By default a "testuser" with password "testpassword" is configured, which should be replaced by proper user credentials!
+
 ### Arguments:
 `-s` Server mode: accept incoming connections from any host
 `-p` Specify the port number (default: `5000`)
