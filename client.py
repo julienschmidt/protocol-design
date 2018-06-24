@@ -305,13 +305,14 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         Update the given file on the server by uploading the new content.
         """
 
-        fileinfo = self.fileinfo[filename]
-        # schedule resend (canceled if ack'ed)
+        self.fileinfo[filename] = self.get_fileinfo(filename.decode('utf8'))
+
+        # schedule resend (canceled if ack'ed) TODO
         '''callback_handle = self.loop.call_later(
             self.resend_delay, self.update_file, filename)
         self.pending_delete_callbacks[filename] = callback_handle'''
 
-        self.send_file_update_request(filename, fileinfo)
+        self.send_file_update_request(filename, self.fileinfo[filename])
 
     def request_file(self, filename, filehash) -> None:
         """
