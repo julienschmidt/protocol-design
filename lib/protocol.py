@@ -291,7 +291,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             filename,
             size.to_bytes(8, byteorder='big'),
             permissions.to_bytes(2, byteorder='big'),
-            modified_at.to_bytes(4, byteorder='big')
+            int(modified_at).to_bytes(4, byteorder='big')
         ])
         return self.sendto(data, addr)
 
