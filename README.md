@@ -17,6 +17,11 @@ See `scsync --help` for all options.
 ### Server:
 `scsync [-s] [-p <port>] [-f <directory-path>]`
 
+#### User Credentials
+For each user a password hash and salt have to be generated using the `tools/gen_user_vkey.py` script.
+
+The credentials are then stored as CSV using the format `<username>,<salt>,<verification_key>` in the `users.csv`.
+
 ### Arguments:
 `-s` Server mode: accept incoming connections from any host
 `-p` Specify the port number (default: `5000`)
