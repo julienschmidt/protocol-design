@@ -249,21 +249,25 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         for filename, fileinfo in self.fileinfo.items():
             if filename not in remote_files:
                 new_file_name = None
-                for remote_file_name in remote_files.keys():
-                    if remote_files[remote_file_name] == fileinfo['filehash']:
-                        new_file_name = remote_file_name
+                for remote_filename, remote_filehash in remote_files.items():
+                    if remote_filehash == fileinfo['filehash']:
+                        new_file_name = remote_filename
 
                 if new_file_name != None:
                     # If the local file hash can be found in the remote files but the name is different, we assume a
                     # we assume it has been renamed by an other client --> Rename local copy
-                    self.loop.call_soon(self.rename_local_file, filename, new_file_name)
+                    self.rename_local_file(filename, new_file_name)
                 else:
                     # If local file is not in remote files and there is no suiting hash (possible rename)
                     # we assume it has been deleted by an other client --> Remove local copy
-                    self.loop.call_soon(self.remove_local_file, filename)
-            # elif fileinfo['filehash'] != remote_files[filename]:
-                # If filehash is not equal we assume an other client has updated the file and we request the new file
-                # self.loop.call_soon(self.request_file, fileinfo)
+                    self.remove_local_file(filename)
+
+        for remote_filename, remote_filehash in remote_files.items():
+            if remote_filename not in self.fileinfo.keys():
+                # If after renaming and removing files that might have changed on the server
+                # we check of any of the remote files still is not present on the client and if so
+                # we assume that the file must be requested from the server using a request_file packet
+                self.loop.call_soon(self.request_file, remote_filename, remote_filehash)
 
         # Call update() repeatedly to get an update of the files on the server and react accordingly
         self.loop.call_later(self.fetch_intercal, self.update)

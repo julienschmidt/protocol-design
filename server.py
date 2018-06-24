@@ -106,8 +106,9 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         logging.debug('Requested file named \"%s\" with hash: %s', filename, filehash)
 
         if filename in self.fileinfo and filehash == self.fileinfo[filename]:
+            fileinfo = self.get_fileinfo(filename.decode('utf8'))
             logging.debug("Send file metadata for file named named \"%s\" to %s", filename, addr)
-            self.send_file_metadata(filename, self.get_fileinfo(filename), addr=addr)
+            self.send_file_metadata(filename, fileinfo, addr=addr)
         else:
             logging.error('Requested file \"%s\" with hash: %s not present on server!', filename, filehash)
             self.__error(filename, filehash, ErrorType.File_Not_Present, None, None, addr)
