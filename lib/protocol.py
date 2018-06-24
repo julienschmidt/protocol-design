@@ -159,7 +159,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         filehash = sha256.hash_file(filepath)
         size = statinfo.st_size
         permissions = (statinfo.st_mode & 0o777)
-        modified_at = statinfo.st_mtime
+        modified_at = int(statinfo.st_mtime)
 
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             logging.debug("Got file info of file %s. " +
