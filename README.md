@@ -12,7 +12,7 @@
 See `scsync --help` for all options.
 
 ### Client:
-`scsync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>]`
+`scsync [-h <hostname|ip-addr>] [-p <port>] [-f <directory-path>] -u <username> -pass <password>`
 
 ### Server:
 `scsync [-s] [-p <port>] [-f <directory-path>] [-cc]` 

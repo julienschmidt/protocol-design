@@ -76,6 +76,9 @@ def main():
     if args.server:
         server.run(args)
     else:
+        if args.user == '':
+            print('User and password must be set!')
+            sys.exit(1)
         client.run(args)
 
 if __name__ == "__main__":
