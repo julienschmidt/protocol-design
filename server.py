@@ -10,6 +10,7 @@ import logging
 import os
 import random
 import signal
+import pyrsync2
 
 from shutil import move
 from tempfile import mkstemp
@@ -149,6 +150,19 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         chunk_queue = upload['chunk_queue']
         chunk_queue.put_nowait((start_byte, payload, addr))
 
+    def handle_file_update(self, data, addr):
+        valid, update_id, start_byte, payload = self.unpack_file_update(
+            data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        upload = self.uploads.get(update_id, None)
+        if upload is None:
+            return
+        chunk_queue = upload['chunk_queue']
+        chunk_queue.put_nowait((start_byte, payload, addr))
+
     def handle_file_delete(self, data, addr):
         valid, filehash, filename = self.unpack_file_delete(data)
         if not valid:
@@ -200,6 +214,27 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
               (old_filename, new_filename))
 
         self.send_ack_rename(filehash, old_filename, new_filename, addr)
+
+    def handle_file_update_request(self, data, addr):
+        valid, filehash, filename, filesize, permissions, modified_at = self.unpack_file_update_request(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+        # create new update entry and determine update_id
+        upload_id, start_at, error = self.__init_update(
+                filehash, filename, filesize, permissions, modified_at)
+        if error:
+            self.__error(filename, filehash, error, None, None, addr)
+            return
+
+        # create checksums
+        file = open(self.path + filename.decode("utf-8"), "rb")
+        hashes = list(pyrsync2.blockchecksums(file, 16384))
+        file.close()
+
+        #print(list(hashes))
+        print("Update request received \"%s\"" % filename)
+        self.send_file_update_response(filename, upload_id, start_at, hashes, addr)
 
     def __gen_upload_id(self):
         """
@@ -257,6 +292,54 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         self.active_uploads[filename] = (upload_id, upload_task)
 
         return (upload_id, start_at, None)
+
+    def __init_update(self, filehash, filename, size, permissions, modified_at):
+        """
+        Initialize a new file upload and return the assigned upload ID.
+        """
+
+        print("Receiving new file update of file \"%s\" with size of %s bytes" % (
+            filename, size))
+
+        # check for existing upload to resume
+        if filename in self.active_uploads:
+            update_id, _ = self.active_uploads[filename]
+            upload = self.uploads[update_id]
+
+            if upload['filehash'] == filehash and upload['size'] == size:
+                # resume upload
+                upload['permissions'] = permissions
+                upload['modified_at'] = modified_at
+                start_at = upload['next_byte']
+                logging.info("resume update at byte %u", start_at)
+                return (update_id, start_at, None)
+
+            elif upload['modified_at'] >= modified_at:
+                # only accept newer files
+                return (0, 0, ErrorType.Conflict)
+
+        start_at = 0
+        update_id = self.__gen_upload_id()
+        upload = {
+            'filehash': filehash,
+            'filename': filename,
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
+
+            'tmpfile': mkstemp(),
+            'next_byte': 0,
+
+            # Queue to pass chunks to the receiver coroutine
+            'chunk_queue': asyncio.Queue(loop=self.loop),
+        }
+
+        upload_task = self.loop.create_task(
+            self.__receive_update(update_id, upload))
+        self.uploads[update_id] = upload
+        self.active_uploads[filename] = (update_id, upload_task)
+
+        return (update_id, start_at, None)
 
     async def __receive_upload(self, upload_id, upload):
         """
@@ -360,6 +443,163 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
             filepath, upload['permissions'], upload['modified_at'])
 
         print("finished upload of file \"%s\"" % filename)
+
+    async def __receive_update(self, upload_id, upload):
+        """
+        This coroutine waits for incoming update chunks and stores them in a byte array. 
+        When the whole update delta information has been received, the filehash
+        is verified before updating the file to the final destination and updating
+        the cached fileinfo.
+        """
+        size = upload['size']
+        tmpfile = upload['tmpfile'][1]
+        error = None
+        data = b''
+        if size > 0:
+            try:
+            
+                chunk_queue = upload['chunk_queue']
+                buffered_chunks = ChunkRecvBuffer(self.max_buf_ahead)
+                pos = 0
+                while pos < size:
+
+                    # TODO: add timeout
+                    start_byte, payload, addr = await chunk_queue.get()
+                    # if startbyte 0: update size
+                    if start_byte == 0:
+                        size = int.from_bytes(payload[0:8], byteorder='big')
+
+                    logging.debug("chunk %s, %s, %s", pos,
+                                  start_byte, len(payload))
+                    if start_byte != pos:
+                        if start_byte > pos:
+                            # ignore chunks with invalid start byte
+                            if start_byte > size:
+                                continue
+
+                            # buffer chunks which can not be immediately
+                            # written
+                            buffered_chunks.put(start_byte, payload)
+                            continue
+
+                        # skip old data
+                        diff = pos - start_byte
+                        if diff > len(payload):
+                            continue
+                        payload = payload[diff:]
+
+                    pos += len(payload)
+
+                    # get max available consecutive byte when including
+                    # buffered chunks
+                    available, matching_chunks = buffered_chunks.max_available(pos)
+                    upload['next_byte'] = available
+                    # send ack with max available byte
+                    self.send_ack_update(upload_id, available, addr)
+                    # add data
+                    data += payload
+                    # handle buffered chunks that can be written now
+                    while matching_chunks > 0:
+                        start_byte, payload = buffered_chunks.pop()
+
+                        # skip old data
+                        diff = pos - start_byte
+                        if diff > len(payload):
+                            continue
+                        payload = payload[diff:]
+
+                        pos += len(payload)
+                        data += payload
+                        matching_chunks -= 1
+            except (asyncio.CancelledError, RuntimeError):
+                return
+            except IOError as e:
+                description = os.strerror(e.errno)
+                logging.error('IOError %u: %s', e.errno, description)
+                if e.errno in [errno.ENOSPC, errno.ENOMEM, errno.EFBIG]:
+                    error = (ErrorType.Out_Of_Memory, description)
+                else:
+                    error = (ErrorType.Upload_Failed, description)
+
+        filename = upload['filename']
+
+        del self.uploads[upload_id]
+        del self.active_uploads[filename]
+
+        if error is not None:
+            os.remove(tmpfile)
+            self.__error(filename, filehash, error[0], bytes(error[1]), None, addr)
+            return
+        
+        # Process received data
+        # remove first 8 bytes: delta size
+        data = data[8:]
+        # remove 32 bytes: hash
+        upload_hash = data[:32]
+        data = data[32:]
+
+        # check 
+        if sha256.hash(data) != upload_hash and error is None:
+            logging.error('deltahash for file \"%s\" did not match!', filename)
+            error = (ErrorType.File_Hash_Error, "deltahash does not match")
+
+        # generate delta list structure
+        i = 0
+        index_cnt = 0
+        delta_list = []
+        last_filled = False
+        while i < len(data):
+            checksum_length = int.from_bytes(data[i:i+4], byteorder='big')
+            if checksum_length == 0:
+                # special case when i == 0, index used is 0, otherwise a non int has been before, therefore index++
+                if i == 0:
+                    delta_list.append(0)
+                else:
+                    index_cnt += 1
+                    delta_list.append(index_cnt)
+                i = i + 4
+                last_filled = False
+            else:
+                if not last_filled and i != 0:
+                    index_cnt += 1
+                    last_filled = True
+                else:
+                    # only for the i == 0 case important
+                    last_filled = True
+                # contains data, add the data
+                delta_list.append(data[i+4:i+4+checksum_length])
+                i = i + 4 + checksum_length
+
+        # update
+        file = open(self.path + filename.decode("utf-8"), "rb") 
+        file.seek(0) 
+        save_to = open(tmpfile, "wb") 
+        pyrsync2.patchstream(file, save_to, delta_list, 16384)
+        file.close()
+        save_to.close()
+
+        # check updated file size/hash
+        filehash = sha256.hash_file(tmpfile)
+        statinfo = os.stat(tmpfile)
+        size = statinfo.st_size 
+
+        if filehash != upload['filehash'] and error is None:
+            logging.error('updated filehash for file \"%s\" did not match!', filename)
+            error = (ErrorType.File_Hash_Error, "updated hash does not match")
+        
+        if size != upload['size'] and error is None:
+            logging.error('updated size for file \"%s\" did not match!', filename)
+            #TODO new error type for size missmatch (?)
+            error = (ErrorType.File_Hash_Error, "updated size does not match")
+
+        filepath = self.path + filename.decode('utf8')
+        move(tmpfile, filepath)
+        self.__set_metadata(filepath, upload['permissions'], upload['modified_at'])
+
+        # update cached fileinfo
+        self.fileinfo[filename] = filehash
+
+        print("finished update of file \"%s\"" % filename)
 
     def __set_metadata(self, filepath, permissions, modified_at):
         """

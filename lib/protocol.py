@@ -5,9 +5,9 @@ Base for scsync protocol implementations.
 import asyncio
 import logging
 import os
+import struct
 
 from typing import Dict, Any
-
 from enum import Enum, unique
 from typing import Tuple
 
@@ -35,6 +35,10 @@ class PacketType(bytes, Enum):
     Ack_Delete = b'\x25'
     File_Rename = b'\x26'
     Ack_Rename = b'\x27'
+    File_Update_Request= b'\x28'
+    File_Update_Response= b'\x29'
+    File_Update= b'\x30'
+    Ack_Update= b'\x31'
 
 
 @unique
@@ -128,6 +132,10 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             PacketType.Ack_Delete: self.handle_ack_delete,
             PacketType.File_Rename: self.handle_file_rename,
             PacketType.Ack_Rename: self.handle_ack_rename,
+            PacketType.File_Update_Request: self.handle_file_update_request,
+            PacketType.File_Update_Response: self.handle_file_update_response,
+            PacketType.File_Update: self.handle_file_update,
+            PacketType.Ack_Update: self.handle_ack_update
         }
         func = handle_methods.get(ptype, self.handle_invalid_packet)
         func(data, addr)
@@ -196,12 +204,28 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         logging.info('received File_Upload from %s', addr)
         return
 
+    def handle_file_update(self, data: bytes, addr: Address) -> None:
+        """
+        Handle File_Update packets.
+        Should by overwritten by the child class to handle this packet type.
+        """
+        logging.info('received File_Update from %s', addr)
+        return
+
     def handle_ack_upload(self, data: bytes, addr: Address) -> None:
         """
         Handle Ack_Upload packets.
         Should by overwritten by the child class to handle this packet type.
         """
         logging.info('received Ack_Upload from %s', addr)
+        return
+
+    def handle_ack_update(self, data: bytes, addr: Address) -> None:
+        """
+        Handle Ack_Update packets.
+        Should by overwritten by the child class to handle this packet type.
+        """
+        logging.info('received Ack_Update from %s', addr)
         return
 
     def handle_file_delete(self, data: bytes, addr: Address) -> None:
@@ -244,8 +268,23 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         logging.warning('received and dropped invalid packet from %s', addr)
 
-    def send_error(self, filename: bytes, filehash: bytes, error_type,
-                   error_id: int, description=None, addr=None) -> int:
+    def handle_file_update_request(self, data: bytes, addr: Address) -> None:
+        """
+        Handle File_Update_Request packets.
+        Should by overwritten by the child class to handle this packet type.
+        """
+        logging.info('received File_Update_Request from %s', addr)
+        return
+
+    def handle_file_update_response(self, data: bytes, addr: Address) -> None:
+        """
+        Handle File_Update_Response packets.
+        Should by overwritten by the child class to handle this packet type.
+        """
+        logging.info('received File_Update_Response from %s', addr)
+        return
+
+    def send_error(self, filename: bytes, filehash: bytes, error_type, error_id: int, description=None, addr=None) -> int:
         """
         Pack and send an Error packet.
         """
@@ -349,6 +388,19 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, addr)
 
+    def send_file_update(self, update_id, start_byte, payload, addr=None):
+        """
+        Pack and send a File_Update packet.
+        """
+        data = b''.join([
+            PacketType.File_Update,
+            update_id.to_bytes(4, byteorder='big'),
+            start_byte.to_bytes(8, byteorder='big'),
+            (len(payload)).to_bytes(2, byteorder='big'),
+            payload
+        ])
+        return self.sendto(data, addr)
+
     def send_ack_upload(self, upload_id, acked_bytes, addr=None):
         """
         Pack and send a Ack_Upload packet.
@@ -356,6 +408,17 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         data = b''.join([
             PacketType.Ack_Upload,
             upload_id.to_bytes(4, byteorder='big'),
+            acked_bytes.to_bytes(8, byteorder='big')
+        ])
+        return self.sendto(data, addr)
+
+    def send_ack_update(self, update_id, acked_bytes, addr=None):
+        """
+        Pack and send a Ack_Update packet.
+        """
+        data = b''.join([
+            PacketType.Ack_Update,
+            update_id.to_bytes(4, byteorder='big'),
             acked_bytes.to_bytes(8, byteorder='big')
         ])
         return self.sendto(data, addr)
@@ -370,6 +433,50 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             (len(filename)).to_bytes(2, byteorder='big'),
             filename
         ])
+        return self.sendto(data, addr)
+
+    def send_file_update_request(self, filename, fileinfo, addr=None):
+        """
+        Request hashes from server for a specific file:
+        """
+        filehash = fileinfo['filehash']
+        size = fileinfo['size']
+        permissions = fileinfo['permissions']
+        modified_at = fileinfo['modified_at']
+
+        data = b''.join([
+            PacketType.File_Update_Request,
+            filehash,
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename,
+            size.to_bytes(8, byteorder='big'),
+            permissions.to_bytes(2, byteorder='big'),
+            struct.pack("d", modified_at)
+            #modified_at.to_bytes(4, byteorder='big')
+        ])
+        return self.sendto(data, addr)
+
+    def send_file_update_response(self, filename, update_id, start_byte, hashes, addr=None):
+        """
+        Pack and send hashes for a specific file:
+        """
+        hash_data = bytes()
+        
+        for checksum, hash_val in hashes:
+            # checksum 8 byte
+            hash_data += struct.pack('>q', checksum)
+            # hash 16 byte
+            hash_data += hash_val
+
+        data = b''.join([
+            PacketType.File_Update_Response,
+            update_id.to_bytes(4, byteorder='big'),
+            start_byte.to_bytes(8, byteorder='big'),
+            (len(filename)).to_bytes(2, byteorder='big'),
+            filename,
+            hash_data
+            ])
+
         return self.sendto(data, addr)
 
     def send_ack_delete(self, filehash, filename, addr=None):
@@ -623,6 +730,32 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                      upload_id, payload_start_byte, len(payload))
         return (True, upload_id, payload_start_byte, payload)
 
+    def unpack_file_update(self, data: bytes):
+        """
+        Unpack the File_Upload packet from the given bytes (data).
+        """
+
+        # Check if the data packet stores enough data to at least store the update_id (4 Bytes),
+        # payload_start_byte (8 Bytes) and the payload_len (2 Bytes)
+        if len(data) < 4 + 8 + 2:
+            logging.error("File_Update packet did not have valid length")
+            return (False, None, None, None)
+
+        update_id = int.from_bytes(data[:4], byteorder='big')
+        payload_start_byte = int.from_bytes(data[4:12], byteorder='big')
+        payload_len = int.from_bytes(data[12:14], byteorder='big')
+        data = data[4 + 8 + 2:]
+
+        if len(data) != payload_len:
+            logging.error("File_Update packet did not have valid length")
+            return (False, None, None, None)
+        payload = data
+
+        logging.info("successfully parsed File_Update with upload ID: %u. "
+                     "The payload starts at byte %u and has length %u",
+                     update_id, payload_start_byte, len(payload))
+        return (True, update_id, payload_start_byte, payload)
+
     def unpack_ack_upload(self, data: bytes):
         """
         Unpack the Ack_Upload packet from the given bytes (data).
@@ -641,6 +774,25 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                      "Acknowledged all bytes until %u",
                      upload_id, acked_bytes)
         return (True, upload_id, acked_bytes)
+
+    def unpack_ack_update(self, data: bytes):
+        """
+        Unpack the Ack_Update packet from the given bytes (data).
+        """
+
+        # Check if the data packet stores enough data to at least store the
+        # update_id (4 Bytes) and the acked_bytes (8 Bytes)
+        if len(data) != 4 + 8:
+            logging.error("Ack_Update packet did not have valid length")
+            return (False, None, None)
+
+        update_id = int.from_bytes(data[:4], byteorder='big')
+        acked_bytes = int.from_bytes(data[4:12], byteorder='big')
+
+        logging.info("successfully parsed Ack_Update for update ID: %u. "
+                     "Acknowledged all bytes until %u",
+                     update_id, acked_bytes)
+        return (True, update_id, acked_bytes)
 
     def unpack_file_delete(self, data: bytes):
         """
@@ -725,3 +877,59 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                          "Should be renamed to %s",
                          old_filename, sha256.hex(filehash), new_filename)
         return (True, filehash, old_filename, new_filename)
+
+    def unpack_file_update_request(self, data: bytes):
+        # Parse filehash and filename
+        valid, data, filehash, filename = self.unpack_filehash_and_name(data)
+        if not valid:
+            return (False, None, None, None, None, None)
+        
+        # Check if the data packet stores enough data to store the size (8 Bytes),
+        # permissions (2 Bytes), and modified_at date (4 Bytes)
+        if len(data) != 8 + 2 + 8:
+            logging.error("File_Update_Request packet did not have valid length")
+            return (False, None, None, None, None, None)
+
+        # Parse filesize, permissions and modified_at
+        filesize = int.from_bytes(data[:8], byteorder='big')
+        permissions = int.from_bytes(data[8:10], byteorder='big')
+        modified_at = struct.unpack("d", data[10:18])[0]
+
+        if logging.getLogger().isEnabledFor(logging.INFO):
+            logging.info("successfully parsed File_Update_Request of %s "
+                         "(hash: %s). filesize: %u, permissions: %o, last modified at: %u",
+                         filename, sha256.hex(filehash), filesize, permissions, modified_at)
+        return (True, filehash, filename, filesize, permissions, modified_at)
+
+    def unpack_file_update_response(self, data: bytes):
+
+        if len(data) < 12:
+            logging.error(
+                "packet not long enough to contain a update_id and resume_at_byte")
+            return (False, None, None, None, None)
+        # Parse update_id and possibly resume_at_byte
+        update_id = int.from_bytes(data[:4], byteorder='big')
+        resume_at_byte = int.from_bytes(data[4:12], byteorder='big')
+
+        if len(data) < 12 +2:
+            logging.error(
+                "packet not long enough to contain a filename")
+            return (False, None, None, None, None)
+        filename_len = int.from_bytes(data[12:14], byteorder='big')
+
+        if len(data) < 12 + 2 + filename_len:
+            logging.warning("File_Update_Request did not have valid length")
+            return (False, None, None, None, None)
+        filename = data[14:14 + filename_len]   
+
+        if len(data) < 12 + 2 + filename_len + 8 + 16:
+            logging.warning("File_Update_Response did not contain a valid checksum/hash pair.")
+            return (False, None, None, None, None)
+
+        checksums = []
+        i = 12 +2 + filename_len
+        while i < len(data):
+            checksums.append((struct.unpack('>q', data[i:i+8])[0], data[i+8:i+24]))
+            i +=24
+
+        return (True, filename, update_id, resume_at_byte, checksums)
