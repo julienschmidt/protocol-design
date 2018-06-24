@@ -9,8 +9,6 @@ import random
 import signal
 import logging
 
-from typing import Dict, Any
-
 import aiofiles
 
 from watchdog.observers import Observer
@@ -74,9 +72,8 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
     """
 
     def __init__(self, loop, path):
-        super().__init__()
+        super().__init__(path)
         self.loop = loop
-        self.path = path
 
         # Set fetch update interval
         self.fetch_intercal = 2.5
@@ -91,7 +88,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         local_files = files.list(path)
         for file in local_files:
             filename = file.encode('utf8')
-            self.fileinfo[filename] = self.__get_fileinfo(file)
+            self.fileinfo[filename] = self.get_fileinfo(file)
 
         # start file dir observer
         event_handler = FileEventHandler(self.loop, self.path, self)
@@ -105,28 +102,6 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.pending_metadata_callbacks = dict()
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
-
-    def __get_fileinfo(self, file) -> Dict[str, Any]:
-        """
-        Get meta information about the given file.
-        """
-        filepath = self.path + file
-        statinfo = os.stat(filepath)
-        filehash = sha256.hash_file(filepath)
-        size = statinfo.st_size
-        permissions = (statinfo.st_mode & 0o777)
-        modified_at = statinfo.st_mtime
-
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug("Got file info of file %s. " +
-                          "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
-                          file, sha256.hex(filehash), size, permissions, modified_at)
-        return {
-            'filehash': filehash,
-            'size': size,
-            'permissions': permissions,
-            'modified_at': modified_at,
-        }
 
     # Socket State
     def connection_made(self, transport):
@@ -157,7 +132,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         callback_handle = self.loop.call_later(self.resend_delay, self.update)
         self.pending_hello_callback = callback_handle
 
-        self.send_client_hello(self.client_id)
+        self.send_client_update_request(self.client_id)
 
     def stop(self) -> None:
         """
@@ -261,7 +236,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.send_ack_error(error_id)
 
     def handle_current_server_state(self, data, addr) -> None:
-        valid, remote_files = self.unpack_server_hello(data)
+        valid, remote_files = self.unpack_current_server_state(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
@@ -286,9 +261,9 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                     # If local file is not in remote files and there is no suiting hash (possible rename)
                     # we assume it has been deleted by an other client --> Remove local copy
                     self.loop.call_soon(self.remove_local_file, filename)
-            elif fileinfo['filehash'] != remote_files[filename]:
+            # elif fileinfo['filehash'] != remote_files[filename]:
                 # If filehash is not equal we assume an other client has updated the file and we request the new file
-                self.loop.call_soon(self.request_file, fileinfo)
+                # self.loop.call_soon(self.request_file, fileinfo)
 
         # Call update() repeatedly to get an update of the files on the server and react accordingly
         self.loop.call_later(self.fetch_intercal, self.update)
@@ -377,7 +352,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         Upload the given file to server.
         """
         if fileinfo is None:
-            fileinfo = self.__get_fileinfo(filename.decode('utf8'))
+            fileinfo = self.get_fileinfo(filename.decode('utf8'))
             # prevent double uploads do to IO-notifications (e.g. create and
             # modify)
             existing_fileinfo = self.fileinfo.get(filename, None)

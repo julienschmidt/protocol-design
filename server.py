@@ -28,9 +28,8 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
     """
 
     def __init__(self, loop, path):
-        super().__init__()
+        super().__init__(path)
         self.loop = loop
-        self.path = path
         self.max_buf_ahead = 4
 
         print('Storing files in', path)
@@ -88,7 +87,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         return
 
     def handle_client_update_request(self, data, addr):
-        valid, client_id = self.unpack_client_hello(data)
+        valid, client_id = self.unpack_client_update_request(data)
         if not valid:
             self.handle_invalid_packet(data, addr)
             return
@@ -96,7 +95,22 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         logging.debug('Client with clientID \"%s\" requested update', client_id)
 
         # respond with Current_Server_State
-        self.send_server_hello(self.fileinfo, addr)
+        self.send_current_server_state(self.fileinfo, addr)
+
+    def handle_client_file_request(self, data, addr) -> None:
+        valid, filehash, filename = self.unpack_client_file_request(data)
+        if not valid:
+            self.handle_invalid_packet(data, addr)
+            return
+
+        logging.debug('Requested file named \"%s\" with hash: %s', filename, filehash)
+
+        if filename in self.fileinfo and filehash == self.fileinfo[filename]:
+            logging.debug("Send file metadata for file named named \"%s\" to %s", filename, addr)
+            self.send_file_metadata(filename, self.get_fileinfo(filename), addr=addr)
+        else:
+            logging.error('Requested file \"%s\" with hash: %s not present on server!', filename, filehash)
+            self.__error(filename, filehash, ErrorType.File_Not_Present, None, None, addr)
 
     def handle_file_metadata(self, data, addr):
         valid, filehash, filename, size, permissions, modified_at = self.unpack_file_metadata(

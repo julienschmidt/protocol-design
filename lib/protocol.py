@@ -4,6 +4,9 @@ Base for scsync protocol implementations.
 
 import asyncio
 import logging
+import os
+
+from typing import Dict, Any
 
 from enum import Enum, unique
 from typing import Tuple
@@ -43,6 +46,7 @@ class ErrorType(bytes, Enum):
     Out_Of_Memory = b'\x01'
     Conflict = b'\x02'
     Upload_Failed = b'\x03'
+    File_Not_Present = b'\x04'
 
 
 class BaseScsyncProtocol(asyncio.DatagramProtocol):
@@ -52,11 +56,35 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     """
     # pylint: disable=too-many-public-methods,no-self-use,unused-argument
 
-    def __init__(self):
+    def __init__(self, path):
+        self.path = path
+
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
+
+    def get_fileinfo(self, file) -> Dict[str, Any]:
+        """
+        Get meta information about the given file.
+        """
+        filepath = self.path + file
+        statinfo = os.stat(filepath)
+        filehash = sha256.hash_file(filepath)
+        size = statinfo.st_size
+        permissions = (statinfo.st_mode & 0o777)
+        modified_at = statinfo.st_mtime
+
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug("Got file info of file %s. " +
+                          "[filehash: %s, size: %u, permissions: %o, modified_at: %u]",
+                          file, sha256.hex(filehash), size, permissions, modified_at)
+        return {
+            'filehash': filehash,
+            'size': size,
+            'permissions': permissions,
+            'modified_at': modified_at,
+        }
 
     def connection_made(self, transport) -> None:
         self.transport = transport
@@ -244,14 +272,14 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         ])
         return self.sendto(data, addr)
 
-    def send_client_hello(self, client_id, addr=None):
+    def send_client_update_request(self, client_id, addr=None):
         """
         Pack and send a Client_Update_Request packet.
         """
         data = PacketType.Client_Update_Request + client_id.to_bytes(8, byteorder='big')
         return self.sendto(data, addr)
 
-    def send_server_hello(self, fileinfos, addr=None):
+    def send_current_server_state(self, fileinfos, addr=None):
         """
         Pack and send a Current_Server_State packet.
         """
@@ -463,7 +491,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         error_id = int.from_bytes(data, byteorder='big')
         return (True, error_id)
 
-    def unpack_client_hello(self, data: bytes):
+    def unpack_client_update_request(self, data: bytes):
         """
         Unpack the Client_Update_Request packet from the given bytes (data).
         """
@@ -478,7 +506,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             "successfully parsed Client_Update_Request with ClientID %u", client_id)
         return (True, client_id)
 
-    def unpack_server_hello(self, data: bytes):
+    def unpack_current_server_state(self, data: bytes):
         """
         Unpack the Current_Server_State packet from the given bytes (data).
         """
@@ -502,6 +530,18 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                 logging.info("%s: %s", filename, sha256.hex(filehash))
 
         return (True, remote_files)
+
+    def unpack_client_file_request(self, data: bytes):
+        """
+        Unpack the Client_File_Request packet from the given bytes (data).
+        """
+
+        # Parse filehash and filename
+        valid, data, filehash, filename = self.unpack_filehash_and_name(data)
+        if not valid:
+            return (False, None, None)
+
+        return (True, filehash, filename)
 
     def unpack_file_metadata(self, data: bytes):
         """

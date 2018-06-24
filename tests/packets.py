@@ -87,12 +87,12 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         proto = TestProtocol()
 
         _client_id = 42
-        proto.send_client_hello(_client_id)
+        proto.send_client_update_request(_client_id)
         self.assertFalse(proto.data is None)
         self.assertTrue(proto.addr is None)
         self.assertEqual(proto.data[0:1], PacketType.Client_Update_Request)
 
-        valid, client_id = proto.unpack_client_hello(
+        valid, client_id = proto.unpack_client_update_request(
             proto.data[1:])
         self.assertTrue(valid)
         self.assertEqual(client_id, _client_id)
@@ -103,12 +103,12 @@ class TestPacketPackingAndUnpacking(unittest.TestCase):
         _client_id = 42
         _fileinfos = {b'test1.py': b'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                       b'test2.py': b'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}
-        proto.send_server_hello(_fileinfos)
+        proto.send_current_server_state(_fileinfos)
         self.assertFalse(proto.data is None)
         self.assertTrue(proto.addr is None)
         self.assertEqual(proto.data[0:1], PacketType.Current_Server_State)
 
-        valid, fileinfos = proto.unpack_server_hello(
+        valid, fileinfos = proto.unpack_current_server_state(
             proto.data[1:])
         self.assertTrue(valid)
         self.assertEqual(fileinfos, _fileinfos)
