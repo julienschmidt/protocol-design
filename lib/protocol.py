@@ -10,6 +10,7 @@ import struct
 from typing import Dict, Any
 from enum import Enum, unique
 from typing import Tuple
+from lib import files
 
 from . import sha256
 
@@ -67,6 +68,15 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         self.resend_delay = 1.0  # Fixed value because no congestion control
         self.chunk_size = 1024  # Should be adjusted to MTU later
         self.max_send_ahead = 4
+
+        # stores the fileinfo for the local files
+        self.fileinfo = dict()
+
+        # list dir
+        local_files = files.list(path)
+        for file in local_files:
+            filename = file.encode('utf8')
+            self.fileinfo[filename] = self.get_fileinfo(file)
 
     def get_fileinfo(self, file) -> Dict[str, Any]:
         """

@@ -35,17 +35,6 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
 
         print('Storing files in', path)
 
-        self.fileinfo = dict()
-        # list dir
-        local_files = files.list(path)
-        for file in local_files:
-            filehash = sha256.hash_file(self.path + file)
-            self.fileinfo[file.encode('utf8')] = filehash
-
-            if logging.getLogger().isEnabledFor(logging.DEBUG):
-                logging.debug("Found file at %s with hash %s",
-                              file, sha256.hex(filehash))
-
         # maps upload IDs to in-progress file uploads
         self.uploads = dict()
 
@@ -95,8 +84,12 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
 
         logging.debug('Client with clientID \"%s\" requested update', client_id)
 
+        server_state = dict()
+        for filename, fileinfo in self.fileinfo.items():
+            server_state[filename] = fileinfo["filehash"]
+
         # respond with Current_Server_State
-        self.send_current_server_state(self.fileinfo, addr)
+        self.send_current_server_state(server_state, addr)
 
     def handle_client_file_request(self, data, addr) -> None:
         valid, filehash, filename = self.unpack_client_file_request(data)
@@ -106,10 +99,9 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
 
         logging.debug('Requested file named \"%s\" with hash: %s', filename, filehash)
 
-        if filename in self.fileinfo and filehash == self.fileinfo[filename]:
-            fileinfo = self.get_fileinfo(filename.decode('utf8'))
+        if filename in self.fileinfo and filehash == self.fileinfo[filename]["filehash"]:
             logging.debug("Send file metadata for file named named \"%s\" to %s", filename, addr)
-            self.send_file_metadata(filename, fileinfo, addr=addr)
+            self.send_file_metadata(filename, self.fileinfo[filename], addr=addr)
         else:
             logging.error('Requested file \"%s\" with hash: %s not present on server!', filename, filehash)
             self.__error(filename, filehash, ErrorType.File_Not_Present, None, None, addr)
@@ -121,7 +113,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
             self.handle_invalid_packet(data, addr)
             return
 
-        if filename in self.fileinfo and filehash == self.fileinfo[filename]:
+        if filename in self.fileinfo and filehash == self.fileinfo[filename]["filehash"]:
             # just adjust metadata, no reupload necessary
             upload_id = 0
             start_at = size
@@ -170,7 +162,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
             return
 
         fileinfo = self.fileinfo.get(filename, None)
-        if fileinfo is None or self.fileinfo[filename] != filehash:
+        if fileinfo is None or self.fileinfo[filename]["filehash"] != filehash:
             self.handle_invalid_packet(data, addr)
             return
 
@@ -193,7 +185,7 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         valid, filehash, old_filename, new_filename = self.unpack_file_rename(
             data)
 
-        if not valid or self.fileinfo[old_filename] != filehash:
+        if not valid or self.fileinfo[old_filename]["filehash"] != filehash:
             self.handle_invalid_packet(data, addr)
             return
 
@@ -207,8 +199,9 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
 
         # Remove the old reference from the internal fileinfo dict and add a
         # new one for the new_filename
+        fileinfo = self.fileinfo[old_filename]
         del self.fileinfo[old_filename]
-        self.fileinfo[new_filename] = filehash
+        self.fileinfo[new_filename] = fileinfo
 
         print("Renamed/Moved file \"%s\" to \"%s\"" %
               (old_filename, new_filename))
@@ -435,7 +428,12 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
             return
 
         # update cached fileinfo
-        self.fileinfo[filename] = filehash
+        self.fileinfo[filename] = {
+            'filehash': filehash,
+            'size': size,
+            'permissions': upload['permissions'],
+            'modified_at': upload['modified_at'],
+        }
 
         filepath = self.path + filename.decode('utf8')
         move(tmpfile, filepath)
@@ -597,7 +595,12 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
         self.__set_metadata(filepath, upload['permissions'], upload['modified_at'])
 
         # update cached fileinfo
-        self.fileinfo[filename] = filehash
+        self.fileinfo[filename] = {
+            'filehash': filehash,
+            'size': size,
+            'permissions': upload['permissions'],
+            'modified_at': upload['modified_at'],
+        }
 
         print("finished update of file \"%s\"" % filename)
 

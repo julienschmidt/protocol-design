@@ -86,13 +86,6 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         print("ClientID:", self.client_id)
         print("Syncing path:", self.path)
 
-        self.fileinfo = dict()
-        # list dir
-        local_files = files.list(path)
-        for file in local_files:
-            filename = file.encode('utf8')
-            self.fileinfo[filename] = self.get_fileinfo(file)
-
         # start file dir observer
         event_handler = FileEventHandler(self.loop, self.path, self)
         self.observer = Observer()
