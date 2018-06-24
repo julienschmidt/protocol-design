@@ -17,8 +17,8 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
     Server implementation of the scsync protocol
     """
 
-    def __init__(self, loop, path):
-        super().__init__(loop, path)
+    def __init__(self, loop, path, packets_per_second):
+        super().__init__(loop, path, packets_per_second)
         print('Storing files in', path)
 
     def handle_ack_error(self, data, addr):
@@ -140,7 +140,7 @@ def run(args):
     server_address = (args.host, args.port)
     print('Starting UDP server on {}:{}\n'.format(*server_address))
     listen = loop.create_datagram_endpoint(
-        lambda: ServerScsyncProtocol(loop, args.path),
+        lambda: ServerScsyncProtocol(loop, args.path, args.packets_per_second),
         local_addr=server_address)
     transport, protocol = loop.run_until_complete(listen)
 

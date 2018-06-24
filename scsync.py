@@ -46,6 +46,9 @@ def main():
     parser.add_argument('-f', dest='path', action='store',
                         default=os.getcwd(), help='directory path containing files')
 
+    parser.add_argument('-cc', dest='packets_per_second', action='store',
+                        default=100, help='packets per second')
+
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--verbose', dest='verbose', action='store_true',
                        default=False, help='verbose output')

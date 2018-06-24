@@ -72,8 +72,8 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
     Client implementation of the scsync protocol
     """
 
-    def __init__(self, loop, path):
-        super().__init__(loop, path)
+    def __init__(self, loop, path, packets_per_second):
+        super().__init__(loop, path, packets_per_second)
 
         # Set fetch update interval
         self.fetch_intercal = 2.5
@@ -361,7 +361,7 @@ def run(args):
     server_address = (args.host, args.port)
     print('Trying to sync with {}:{}\n'.format(*server_address))
     connect = loop.create_datagram_endpoint(
-        lambda: ClientScsyncProtocol(loop, args.path),
+        lambda: ClientScsyncProtocol(loop, args.path, args.packets_per_second),
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
 

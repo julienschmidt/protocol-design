@@ -70,9 +70,10 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     """
     # pylint: disable=too-many-public-methods,no-self-use,unused-argument
 
-    def __init__(self, loop, path):
+    def __init__(self, loop, path, packets_per_second):
         self.loop = loop
         self.path = path
+        self.packets_per_second = packets_per_second
 
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
@@ -1610,7 +1611,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                         chunk_buffer.put(expiry_time, pos, buf)
                         pos += len(buf)
 
-                        await asyncio.sleep(0.01)  # TODO: adjust to send rate
+                        # Congestion Control
+                        await asyncio.sleep(1 / self.packets_per_second)
 
                         # check status
                         if ack[0].is_set():
@@ -1695,7 +1697,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                         chunk_buffer.put(expiry_time, pos, buf)
                         pos += len(buf)
 
-                        await asyncio.sleep(0.01)  # TODO: adjust to send rate
+                        # Congestion Control
+                        await asyncio.sleep(1 / self.packets_per_second)
 
                         # check status
                         if ack[0].is_set():
