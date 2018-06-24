@@ -1548,8 +1548,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             active_upload[1].cancel()
 
         # schedule resend (canceled if ack'ed)
-        callback_handle = self.loop.call_later(self.resend_delay, self.upload_file, filename, fileinfo, addr)
-        self.pending_metadata_callbacks[filename] = callback_handle
+        # callback_handle = self.loop.call_later(self.resend_delay, self.upload_file, filename, fileinfo, addr)
+        # self.pending_metadata_callbacks[filename] = callback_handle
 
         # send file metadata
         self.send_file_metadata(filename, fileinfo)

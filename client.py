@@ -229,11 +229,13 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                     self.remove_local_file(filename)
 
         for remote_filename, remote_filehash in remote_files.items():
-            if remote_filename not in self.fileinfo.keys():
+            if remote_filename not in self.fileinfo.keys() or self.fileinfo[remote_filename]['filehash'] is not remote_filehash:
                 # If after renaming and removing files that might have changed on the server
-                # we check of any of the remote files still is not present on the client and if so
-                # we assume that the file must be requested from the server using a request_file packet
+                # we check of any of the remote files still is not present on the client or is
+                # present but has a different hash and if so we assume that the file must be
+                # requested from the server using a request_file packet
                 self.loop.call_soon(self.request_file, remote_filename, remote_filehash, addr)
+
 
         # Call update() repeatedly to get an update of the files on the server and react accordingly
         self.loop.call_later(self.fetch_intercal, self.update)
