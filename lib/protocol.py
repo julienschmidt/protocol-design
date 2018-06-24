@@ -106,6 +106,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         self.pending_delete_callbacks = dict()
         self.pending_rename_callbacks = dict()
 
+        # Handle misleading delete callbacks because of move operation
+        self.expected_delete_calls = list()
+
     # File Handling
 
     def get_fileinfo(self, file) -> Dict[str, Any]:
@@ -136,6 +139,10 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         os.chmod(filepath, permissions)
         os.utime(filepath, times=(modified_at, modified_at))
+
+    def remove_expected_delete_calls(self, filename):
+        if filename in self.expected_delete_calls:
+            self.expected_delete_calls.remove(filename)
 
     # Packet Management
 
@@ -1359,7 +1366,11 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         }
 
         filepath = self.path + filename.decode('utf8')
+
+        self.expected_delete_calls.append(filename)  # A delete call might be triggered when moving the file
         move(tmpfile, filepath)
+        self.loop.call_later(0.5, self.remove_expected_delete_calls, filename)
+
         self.set_metadata(
             filepath, upload['permissions'], upload['modified_at'])
 
@@ -1514,7 +1525,10 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             error = (ErrorType.File_Hash_Error, "updated size does not match")
 
         filepath = self.path + filename.decode('utf8')
+        self.expected_delete_calls.append(filename) # A delete call might be triggered when moving the file
         move(tmpfile, filepath)
+        self.loop.call_later(0.5, self.remove_expected_delete_calls, filename)
+
         self.set_metadata(filepath, upload['permissions'], upload['modified_at'])
 
         # update cached fileinfo

@@ -44,6 +44,10 @@ class FileEventHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
+        if self.relative_filepath(event.src_path) in self.protocol.expected_delete_calls:
+            self.protocol.remove_expected_delete_calls(self.relative_filepath(event.src_path))
+            return
+
         self.loop.call_soon_threadsafe(self.protocol.delete_file,
                                        self.relative_filepath(event.src_path))
 
@@ -220,7 +224,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
                         new_file_name = remote_filename
 
                 if new_file_name is not None:
-                    # If the local file hash can be found in the remote files but the name is different, we assume a
+                    # If the local file hash can be found in the remote files but the name is different,
                     # we assume it has been renamed by an other client --> Rename local copy
                     self.rename_local_file(filename, new_file_name)
                 else:
