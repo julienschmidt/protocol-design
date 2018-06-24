@@ -11,9 +11,8 @@ import os
 import io
 import random
 
-from typing import Dict, Any
+from typing import Any, Dict, Tuple
 from enum import Enum, unique
-from typing import Tuple
 from shutil import move
 from tempfile import mkstemp
 
@@ -247,7 +246,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         if encrypted:
             session = self.sessions.get(session_id, None)
             if not session:
-                return
+                return 0
 
             nonce = session['nonce']
             session['nonce'] += 2
@@ -1901,7 +1900,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         # send file metadata
         self.send_file_metadata(session_id, filename, fileinfo)
 
-    async def do_update(self, session_id, filename, update_id, resume_at_byte, data, addr) -> None:
+    async def do_update(self, session_id: int, filename: bytes, update_id: int, resume_at_byte: int, data: bytes, addr) -> None:
         """
         This coroutine sends update delta data as
         File_Update packets. It then waits for acknowledgment and resends
@@ -1948,9 +1947,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                         await asyncio.sleep(1 / self.packets_per_second)
 
                         # check status
-                        if ack[0].is_set():
-                            ack[0].clear()
-                            acked_bytes = ack[1]
+                        if ack[0].is_set(): # type: ignore
+                            ack[0].clear() # type: ignore
+                            acked_bytes = ack[1] # type: ignore
                             logging.debug('got acks until %u', acked_bytes)
                             current_time = self.loop.time()
                             expired_chunks = chunk_buffer.adjust(
@@ -1967,13 +1966,13 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                     timeout = min_expiry_time - current_time
                     if timeout > 0:
                         try:
-                            await asyncio.wait_for(ack[0].wait(),
+                            await asyncio.wait_for(ack[0].wait(), # type: ignore
                                                    timeout=timeout,
                                                    loop=self.loop)
                         except asyncio.TimeoutError:
                             pass
-                    ack[0].clear()
-                    acked_bytes = ack[1]
+                    ack[0].clear() # type: ignore
+                    acked_bytes = ack[1] # type: ignore
                     logging.debug('got acks until %u', acked_bytes)
                     expired_chunks = chunk_buffer.adjust(
                         current_time, acked_bytes)
@@ -2038,9 +2037,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                         await asyncio.sleep(1 / self.packets_per_second)
 
                         # check status
-                        if ack[0].is_set():
-                            ack[0].clear()
-                            acked_bytes = ack[1]
+                        if ack[0].is_set(): # type: ignore
+                            ack[0].clear() # type: ignore
+                            acked_bytes = ack[1] # type: ignore
                             logging.debug('got acks until %u', acked_bytes)
                             current_time = self.loop.time()
                             expired_chunks = chunk_buffer.adjust(
@@ -2057,13 +2056,13 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                     timeout = min_expiry_time - current_time
                     if timeout > 0:
                         try:
-                            await asyncio.wait_for(ack[0].wait(),
+                            await asyncio.wait_for(ack[0].wait(), # type: ignore
                                                    timeout=timeout,
                                                    loop=self.loop)
                         except asyncio.TimeoutError:
                             pass
-                    ack[0].clear()
-                    acked_bytes = ack[1]
+                    ack[0].clear() # type: ignore
+                    acked_bytes = ack[1] # type: ignore
                     logging.debug('got acks until %u', acked_bytes)
                     expired_chunks = chunk_buffer.adjust(
                         current_time, acked_bytes)
