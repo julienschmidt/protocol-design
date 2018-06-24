@@ -157,7 +157,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.send_client_hello(self.client_id)
 
         # Call Client Hallo repeatedly to get an update of the files on the server and react accordingly
-        self.loop.call_later(self.fetch_intercal, self.start)
+        # self.loop.call_later(self.fetch_intercal, self.start)
 
     def stop(self) -> None:
         """
@@ -200,6 +200,24 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
             if active_upload is not None:
                 active_upload[1].cancel()
 
+    # Local file handling
+    def remove_local_file(self, filename) -> None:
+        """
+        Remove a local file from the file system
+        """
+
+        # Remove the file from the file system
+        if os.path.isfile(self.path + filename.decode("utf-8")):
+            os.remove(self.path + filename.decode("utf-8"))
+        else:
+            logging.warning("Could not remove file \"%s\"", filename)
+            return
+
+        # Remove the file from the internal fileinfo dict
+        del self.fileinfo[filename]
+
+        print("Deleted file \"%s\"" % filename)
+
     # Packet Handlers
     def handle_error(self, data, addr) -> None:
         logging.info('received Error from %s', addr)
@@ -234,7 +252,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # build file dir diff
         for filename, fileinfo in self.fileinfo.items():
             if filename not in remote_files:
-                self.loop.call_soon(self.upload_file, filename, fileinfo)
+                self.loop.call_soon(self.remove_local_file, filename, fileinfo)
             elif fileinfo['filehash'] != remote_files[filename]:
                 self.loop.call_soon(self.request_file, fileinfo)
 
@@ -344,7 +362,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         # send file metadata
         self.send_file_metadata(filename, fileinfo)
 
-    def delete_file(self, filename) -> None:
+    def delete_file(self, filename, fileinfo=None) -> None:
         """
         Delete the given file from the server.
         """
@@ -365,23 +383,6 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         Update the given file on the server by uploading the new content.
         """
         self.upload_file(filename, fileinfo)
-
-    def delete_file(self, filename, fileinfo=None) -> None:
-        """
-        Request a given file on the server.
-        """
-
-        # Remove the file from the file system
-        if os.path.isfile(self.path + filename.decode("utf-8")):
-            os.remove(self.path + filename.decode("utf-8"))
-        else:
-            logging.warning("Could not remove file \"%s\"", filename)
-            return
-
-        # Remove the file from the internal fileinfo dict
-        del self.fileinfo[filename]
-
-        print("Deleted file \"%s\"" % filename)
 
     def request_file(self, fileinfo) -> None:
         """
