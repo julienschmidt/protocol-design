@@ -913,8 +913,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
             filename,
             size.to_bytes(8, byteorder='big'),
             permissions.to_bytes(2, byteorder='big'),
-            struct.pack("d", modified_at)
-            #modified_at.to_bytes(4, byteorder='big')
+            int(modified_at).to_bytes(4, byteorder='big')
         ])
         return self.sendto(data, session_id, addr)
 
@@ -1428,7 +1427,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         # Parse filesize, permissions and modified_at
         filesize = int.from_bytes(data[:8], byteorder='big')
         permissions = int.from_bytes(data[8:10], byteorder='big')
-        modified_at = struct.unpack("d", data[10:18])[0]
+        modified_at = int.from_bytes(data[10:14], byteorder='big')
 
         if logging.getLogger().isEnabledFor(logging.INFO):
             logging.info("successfully parsed File_Update_Request of %s "
