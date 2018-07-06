@@ -259,6 +259,7 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.sessions[request_id] = {
             'encryptor': encryptor,
             'nonce': 0,
+            'user': self.username
         }
 
         self.send_challenge_response(
