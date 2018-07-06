@@ -10,6 +10,7 @@ import logging
 import os
 import io
 import random
+import time
 
 from typing import Any, Dict, Tuple
 from enum import Enum, unique
@@ -106,6 +107,10 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         # stores the fileinfo for the local files
         self.fileinfo = dict()
+
+        # For time measurements
+        self.times_create = dict()
+        self.times_start = dict()
 
         # list dir
         local_files = files.list(path)
@@ -1887,6 +1892,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         Upload the given file to server.
         """
+        self.times_create[filename] = time.monotonic()
+
         if fileinfo is None:
             fileinfo = self.get_fileinfo(filename.decode('utf8'))
             # prevent double uploads do to IO-notifications (e.g. create and
@@ -2009,6 +2016,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         File_Upload packets. It then waits for acknowledgment and resends
         the packet if the sent chunk is not acknowledged.
         """
+        self.times_start[filename] = time.monotonic()
+
         filepath = self.path + filename.decode('utf8')
         size = fileinfo['size']
         try:
@@ -2092,6 +2101,18 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         del self.active_uploads[filename]
         self.epoch += 1
+
+        # print upload times TODO maybe logging?
+        atm_time = time.monotonic()
+        create_time = self.times_create[filename]
+        start_time = self.times_start[filename]
+        print("Create time: %fs, Start time: %fs, End time: %fs" % (create_time, start_time, atm_time))
+        print("Time till start of upload: %fs, Duration upload: %fs" %(start_time - create_time, atm_time - start_time))
+        
+        # Clean lists
+        self.times_create.pop(filename)
+        self.times_start.pop(filename)
+
         print("Upload of file \"%s\" was finished" % filename)
 
     def resend_chunks(self, session_id: int, expired_chunks, upload_id: int, chunk_buffer, addr):
