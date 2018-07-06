@@ -60,6 +60,7 @@ def main():
                        default=False, help='verbose debug output')
 
     args = parser.parse_args()
+    args.test = False
 
     # normalize path
     args.path = os.path.abspath(args.path) + '/'

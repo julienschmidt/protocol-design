@@ -447,12 +447,13 @@ def run(args):
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
 
-    for signame in ('SIGINT', 'SIGTERM'):
-        loop.add_signal_handler(getattr(signal, signame),
-                                functools.partial(protocol.signal, signame))
+    if not args.test:
+        for signame in ('SIGINT', 'SIGTERM'):
+            loop.add_signal_handler(getattr(signal, signame),
+                                    functools.partial(protocol.signal, signame))
 
-    print("Event loop running forever, press Ctrl+C to interrupt.")
-    print("PID %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
+        print("Event loop running forever, press Ctrl+C to interrupt.")
+        print("PID %s: send SIGINT or SIGTERM to exit.\n\n" % os.getpid())
 
     try:
         loop.run_forever()
