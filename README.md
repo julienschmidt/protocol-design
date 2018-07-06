@@ -32,3 +32,11 @@ The credentials are then stored as CSV using the format `<username>,<salt>,<veri
 `-cc` Packets per second
 `--verbose` Enable logging of most events
 `--debug` Enable debug logging, all events are logged
+
+## Test:
+`scsynctest [-f <directory-path>]`  
+
+Tests following areas for files of the following sizes: 5 MB, 50 MB, 100 MB, 200 MB, 500 MB, 1 GB and prints out the results in a formatted way to assess the performance of the protocol.  
+* Per file download time
+* Per file overhead (how many bytes to send for metadata besides payload)
+* Setup time until first byte received (Time-to-first byte)
