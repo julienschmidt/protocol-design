@@ -76,11 +76,11 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
     Client implementation of the scsync protocol
     """
 
-    def __init__(self, loop, path, packets_per_second, username, password):
+    def __init__(self, loop, path, packets_per_second, test, username, password):
         print("Using user:", username)
         print()
 
-        super().__init__(loop, path, packets_per_second)
+        super().__init__(loop, path, packets_per_second, test)
         print("Syncing path:", self.path)
         print()
 
@@ -443,7 +443,7 @@ def run(args):
     print('Trying to sync with {}:{}\n'.format(*server_address))
     connect = loop.create_datagram_endpoint(
         lambda: ClientScsyncProtocol(
-            loop, args.path, args.cc, args.user, args.password),
+            loop, args.path, args.cc, args.test, args.user, args.password),
         remote_addr=server_address)
     transport, protocol = loop.run_until_complete(connect)
 

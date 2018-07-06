@@ -31,8 +31,8 @@ class ServerScsyncProtocol(BaseScsyncProtocol):
     Server implementation of the scsync protocol
     """
 
-    def __init__(self, loop, path, packets_per_second, users):
-        super().__init__(loop, path, packets_per_second)
+    def __init__(self, loop, path, packets_per_second, test, users):
+        super().__init__(loop, path, packets_per_second, test)
         print('Storing files in', path)
 
         # key for auth challenges
@@ -260,7 +260,7 @@ def run(args):
     server_address = (args.host, args.port)
     print('Starting UDP server on {}:{}\n'.format(*server_address))
     listen = loop.create_datagram_endpoint(
-        lambda: ServerScsyncProtocol(loop, args.path, args.cc, users),
+        lambda: ServerScsyncProtocol(loop, args.path, args.cc, args.test, users),
         local_addr=server_address)
     transport, protocol = loop.run_until_complete(listen)
 
