@@ -120,23 +120,52 @@ def main():
     client_1_thread = threading.Thread(target=startClient1, args=(copy.deepcopy(args),))
     client_1_thread.start()
 
+    # # Start Client 2
+    # def startClient2(args):
+    #     args.path = client_two_dir
+    #     args.user = 'testuser'
+    #     args.password = 'testpassword'
+    #     args.server = False
+    #
+    #     logging.info("Start Client 2")
+    #
+    #     new_event_loop = asyncio.new_event_loop()
+    #     asyncio.set_event_loop(new_event_loop)
+    #     client.run(args)
+    #
+    # client_2_thread = threading.Thread(target=startClient2, args=(copy.deepcopy(args),))
+    # client_2_thread.start()
+
     time.sleep(1)
 
-    # Start Client 2
-    def startClient2(args):
-        args.path = client_two_dir
-        args.user = 'testuser'
-        args.password = 'testpassword'
-        args.server = False
+    with open(client_one_dir + '5MB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 5))
 
-        logging.info("Start Client 2")
+    time.sleep(2)
 
-        new_event_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_event_loop)
-        client.run(args)
+    with open(client_one_dir + '50MB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 50))
 
-    client_2_thread = threading.Thread(target=startClient2, args=(copy.deepcopy(args),))
-    client_2_thread.start()
+    time.sleep(4)
+
+    with open(client_one_dir + '100MB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 100))
+
+    time.sleep(8)
+
+    with open(client_one_dir + '200MB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 200))
+
+    time.sleep(16)
+
+    with open(client_one_dir + '500MB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 500))
+
+    time.sleep(32)
+
+    with open(client_one_dir + '1GB', 'wb') as file:
+        file.write(os.urandom(1000 * 1000 * 1000))
+
 
 if __name__ == "__main__":
     main()
