@@ -1,0 +1,49 @@
+Pauls-MBP-4:Protocol Design - Group 4 paulschmiedmayer$ ./scsynctest -f /Users/paulschmiedmayer/Desktop/Test 
+Starting UDP server on localhost:5000
+
+Storing files in /Users/paulschmiedmayer/Desktop/Test/server/
+Users:
+  testuser
+
+Trying to sync with localhost:5000
+
+Using user: testuser
+
+Syncing path: /Users/paulschmiedmayer/Desktop/Test/client1/
+
+Upload "b'5MB.txt'"
+Receiving new file upload of file "b'5MB.txt'" with size of 5000000 bytes
+Create time: 89124.794496s, Start time: 89124.813566s, End time: 89128.709889s
+Time till start of upload: 0.019070s, Duration upload: 3.896323s
+Upload of file "b'5MB.txt'" was finished
+finished upload of file "b'5MB.txt'"
+Upload "b'50MB.txt'"
+Receiving new file upload of file "b'50MB.txt'" with size of 50000000 bytes
+Create time: 89130.908810s, Start time: 89131.039272s, End time: 89169.423937s
+Time till start of upload: 0.130462s, Duration upload: 38.384665s
+Upload of file "b'50MB.txt'" was finished
+finished upload of file "b'50MB.txt'"
+Upload "b'100MB.txt'"
+Receiving new file upload of file "b'100MB.txt'" with size of 100000000 bytes
+Create time: 89183.012156s, Start time: 89183.268681s, End time: 89264.331704s
+Time till start of upload: 0.256525s, Duration upload: 81.063023s
+Upload of file "b'100MB.txt'" was finished
+finished upload of file "b'100MB.txt'"
+Upload "b'200MB.txt'"
+Receiving new file upload of file "b'200MB.txt'" with size of 200000000 bytes
+Create time: 89287.316183s, Start time: 89287.836490s, End time: 89442.691994s
+Time till start of upload: 0.520307s, Duration upload: 154.855503s
+Upload of file "b'200MB.txt'" was finished
+finished upload of file "b'200MB.txt'"
+Upload "b'500MB.txt'"
+Receiving new file upload of file "b'500MB.txt'" with size of 500000000 bytes
+Create time: 89498.000909s, Start time: 89499.242074s, End time: 89867.931656s
+Time till start of upload: 1.241164s, Duration upload: 368.689582s
+Upload of file "b'500MB.txt'" was finished
+finished upload of file "b'500MB.txt'"
+Upload "b'1000MB.txt'"
+Receiving new file upload of file "b'1000MB.txt'" with size of 1000000000 bytes
+Create time: 90020.297176s, Start time: 90022.853274s, End time: 90765.438757s
+Time till start of upload: 2.556099s, Duration upload: 742.585483s
+Upload of file "b'1000MB.txt'" was finished
+finished upload of file "b'1000MB.txt'"

@@ -20,6 +20,7 @@ import threading
 import asyncio
 import time
 
+
 import client
 import server
 
@@ -43,8 +44,20 @@ def create_or_clear(direcotry):
 
 # Create a file with a given size in MB
 def create_file(size, dir):
-    with open(dir + str(size) + 'MB', 'wb') as file:
+    with open(dir + '.temp/' + str(size) + 'MB.txt', 'wb') as file:
         file.write(os.urandom(1000 * 1000 * size))
+        file.flush()
+        os.fsync(file)
+        os.rename(dir + '.temp/' + str(size) + 'MB.txt', dir + str(size) + 'MB.txt')
+
+
+# UNIX Signals
+def signal(self, signame) -> None:
+    """
+    UNIX signal handler.
+    """
+    print("Got signal %s: exit" % signame)
+    self.stop()
 
 def main():
     """
@@ -83,15 +96,16 @@ def main():
     # Create Dirs
     server_dir = args.path + 'server/'
     client_one_dir = args.path + 'client1/'
-    client_two_dir = args.path + 'client2/'
+    # client_two_dir = args.path + 'client2/'
 
     create_or_clear(server_dir)
     create_or_clear(client_one_dir)
-    create_or_clear(client_two_dir)
+    create_or_clear(client_one_dir + '.temp')
+    # create_or_clear(client_two_dir)
 
     args.test = True
     args.port = 5000
-    args.cc = 100
+    args.cc = 5000
     args.host = 'localhost'
     args.server = True
 
@@ -108,7 +122,7 @@ def main():
     server_thread = threading.Thread(target=startServer, args=(copy.deepcopy(args), ))
     server_thread.start()
 
-    time.sleep(2)
+    time.sleep(1)
 
     # Start Client 1
     def startClient1(args):
@@ -126,6 +140,7 @@ def main():
     client_1_thread = threading.Thread(target=startClient1, args=(copy.deepcopy(args),))
     client_1_thread.start()
 
+    time.sleep(1)
 
     # Uncomment to test with second client:
 
@@ -145,15 +160,23 @@ def main():
     # client_2_thread = threading.Thread(target=startClient2, args=(copy.deepcopy(args),))
     # client_2_thread.start()
 
-    # TODO: Measure time until file upload is complete
     create_file(5, client_one_dir)
-
     # TODO: Only start next upload when previous is complete
+    # TODO: Measure how much data is end and what the overhead is
+    time.sleep(5)
 
     create_file(50, client_one_dir)
+    time.sleep(50)
+
     create_file(100, client_one_dir)
+    time.sleep(100)
+
     create_file(200, client_one_dir)
+    time.sleep(200)
+
     create_file(500, client_one_dir)
+    time.sleep(500)
+
     create_file(1000, client_one_dir)
 
 
