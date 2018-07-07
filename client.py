@@ -88,8 +88,6 @@ class ClientScsyncProtocol(BaseScsyncProtocol):
         self.fetch_intercal = 10.0 # should be ~ 30s in production
         self.pending_update_callback = None
 
-        # For time measurements
-        self.times = None
 
         self.username = username
         self.authenticator = srp.User(

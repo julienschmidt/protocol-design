@@ -110,8 +110,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         self.fileinfo = dict()
 
         # For time measurements
-        self.times_create = dict()
-        self.times_start = dict()
+        self.times = dict()
 
         # list dir
         local_files = files.list(path)
@@ -153,6 +152,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         elif enc_mode == EncryptionMode.AES_128_GCM:
             return AESGCM(session_key[:16])
         return None
+
+    def get_timelist(self) -> Dict[str, Any]:
+        return self.times
 
     # File Handling
 
@@ -484,6 +486,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         upload = self.uploads.get(upload_id, None)
         if upload is None:
             return
+
         chunk_queue = upload['chunk_queue']
         chunk_queue.put_nowait((start_byte, payload, addr))
 
@@ -1893,7 +1896,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         Upload the given file to server.
         """
-        self.times_create[filename] = time.monotonic()
+        self.times[filename] = {'create': time.monotonic()}
 
         if fileinfo is None:
             fileinfo = self.get_fileinfo(filename.decode('utf8'))
@@ -2017,7 +2020,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         File_Upload packets. It then waits for acknowledgment and resends
         the packet if the sent chunk is not acknowledged.
         """
-        self.times_start[filename] = time.monotonic()
+        self.times[filename].update({'start':time.monotonic()})
 
         filepath = self.path + filename.decode('utf8')
         size = fileinfo['size']
@@ -2048,6 +2051,12 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                         # send chunk
                         self.send_file_upload(
                             session_id, upload_id, pos, buf, addr=addr)
+
+                        # count send packets
+                        if 'count' in self.times[filename]:
+                            self.times[filename].update({'count':self.times[filename]['count'] + 1})
+                        else:
+                            self.times[filename].update({'count':1})
 
                         expiry_time = self.loop.time() + self.resend_delay
                         chunk_buffer.put(expiry_time, pos, buf)
@@ -2104,15 +2113,16 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         self.epoch += 1
 
         # print upload times TODO maybe logging?
-        atm_time = time.monotonic()
-        create_time = self.times_create[filename]
-        start_time = self.times_start[filename]
-        print("Create time: %fs, Start time: %fs, End time: %fs" % (create_time, start_time, atm_time))
+        self.times[filename].update({'end':time.monotonic()})
+        atm_time = self.times[filename]['end']
+        create_time = self.times[filename]['create']
+        start_time = self.times[filename]['start']
+        packets = self.times[filename]['count']
+        print("Create time: %fs, Start time: %fs, End time: %fs, Packets: %d" % (create_time, start_time, atm_time, packets))
         print("Time till start of upload: %fs, Duration upload: %fs" %(start_time - create_time, atm_time - start_time))
         
-        # Clean lists
-        self.times_create.pop(filename)
-        self.times_start.pop(filename)
+        # Clean list
+        self.times.pop(filename)
 
         print("Upload of file \"%s\" was finished" % filename)
 
