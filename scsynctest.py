@@ -167,16 +167,16 @@ def main():
     time.sleep(2)
 
     create_file(50, client_one_dir)
-    time.sleep(11)
+    time.sleep(6)
 
     create_file(100, client_one_dir)
-    time.sleep(22)
+    time.sleep(11)
 
     create_file(200, client_one_dir)
-    time.sleep(44)
+    time.sleep(22)
 
     create_file(500, client_one_dir)
-    time.sleep(110)
+    time.sleep(55)
 
     create_file(1000, client_one_dir)
 

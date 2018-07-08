@@ -102,9 +102,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
-        self.chunk_size = 4096 # Should be adjusted to MTU later
-        self.max_send_ahead = 8
-        self.max_buf_ahead = 8
+        self.chunk_size = 8192 # Should be adjusted to MTU later
+        self.max_send_ahead = 16
+        self.max_buf_ahead = 16
 
         # stores the fileinfo for the local files
         self.fileinfo = dict()
@@ -2120,7 +2120,7 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         packets = self.times[filename]['count']
         print("Create time: %fs, Start time: %fs, End time: %fs, Packets: %d" % (create_time, start_time, atm_time, packets))
         print("Time till start of upload: %fs, Duration upload: %fs" %(start_time - create_time, atm_time - start_time))
-        
+
         # Clean list
         self.times.pop(filename)
 
