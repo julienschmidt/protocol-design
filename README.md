@@ -30,6 +30,7 @@ The credentials are then stored as CSV using the format `<username>,<salt>,<veri
 `-f` Directory that should be used to upload (client mode) or store the files (server mode)
 `-h` Remote hosts
 `-cc` Packets per second
+`-cs` Chunk size (adapt to your MTU, default: `8192`)
 `--verbose` Enable logging of most events
 `--debug` Enable debug logging, all events are logged
 

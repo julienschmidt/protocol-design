@@ -94,15 +94,15 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
     """
     # pylint: disable=too-many-public-methods,no-self-use,unused-argument
 
-    def __init__(self, loop, path, packets_per_second, test):
+    def __init__(self, loop, path, packets_per_second, chunk_size, test):
         self.loop = loop
         self.path = path
         self.packets_per_second = packets_per_second
         self.test = test
+        self.chunk_size = chunk_size
 
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
-        self.chunk_size = 8192 # Should be adjusted to MTU later
         self.max_send_ahead = 16
         self.max_buf_ahead = 16
 

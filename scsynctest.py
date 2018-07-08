@@ -109,6 +109,7 @@ def main():
     args.port = 5000
     args.host = 'localhost'
     args.cc = 5000
+    args.chunk_size = 8192
 
     # Start Server
     def startServer(args):

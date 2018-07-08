@@ -53,6 +53,10 @@ def main():
     parser.add_argument('-pass', dest='password', action='store',
                         default='', help='client user password')
 
+    # Should be adjusted to MTU later
+    parser.add_argument('-cs', dest='chunk_size', action='store',
+                        default=8192, type=int, help='chunk size when transfering data')
+
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--verbose', dest='verbose', action='store_true',
                        default=False, help='verbose output')
