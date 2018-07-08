@@ -1,4 +1,4 @@
-Pauls-MBP-4:Protocol Design - Group 4 paulschmiedmayer$ ./scsynctest -f /Users/paulschmiedmayer/Desktop/Test 
+Pauls-MBP-4:Protocol Design - Group 4 paulschmiedmayer$ ./scsynctest -f /Users/paulschmiedmayer/Desktop/Test
 Starting UDP server on localhost:5000
 
 Storing files in /Users/paulschmiedmayer/Desktop/Test/server/
@@ -13,37 +13,37 @@ Syncing path: /Users/paulschmiedmayer/Desktop/Test/client1/
 
 Upload "b'5MB.txt'"
 Receiving new file upload of file "b'5MB.txt'" with size of 5000000 bytes
-Create time: 89124.794496s, Start time: 89124.813566s, End time: 89128.709889s
-Time till start of upload: 0.019070s, Duration upload: 3.896323s
+Create time: 161176.727318s, Start time: 161176.747704s, End time: 161177.704088s, Packets: 1221
+Time till start of upload: 0.020387s, Duration upload: 0.956383s
 Upload of file "b'5MB.txt'" was finished
 finished upload of file "b'5MB.txt'"
 Upload "b'50MB.txt'"
 Receiving new file upload of file "b'50MB.txt'" with size of 50000000 bytes
-Create time: 89130.908810s, Start time: 89131.039272s, End time: 89169.423937s
-Time till start of upload: 0.130462s, Duration upload: 38.384665s
+Create time: 161179.838614s, Start time: 161179.966996s, End time: 161189.596172s, Packets: 12208
+Time till start of upload: 0.128382s, Duration upload: 9.629176s
 Upload of file "b'50MB.txt'" was finished
 finished upload of file "b'50MB.txt'"
 Upload "b'100MB.txt'"
 Receiving new file upload of file "b'100MB.txt'" with size of 100000000 bytes
-Create time: 89183.012156s, Start time: 89183.268681s, End time: 89264.331704s
-Time till start of upload: 0.256525s, Duration upload: 81.063023s
+Create time: 161193.022641s, Start time: 161193.349553s, End time: 161212.538312s, Packets: 24415
+Time till start of upload: 0.326913s, Duration upload: 19.188759s
 Upload of file "b'100MB.txt'" was finished
 finished upload of file "b'100MB.txt'"
 Upload "b'200MB.txt'"
 Receiving new file upload of file "b'200MB.txt'" with size of 200000000 bytes
-Create time: 89287.316183s, Start time: 89287.836490s, End time: 89442.691994s
-Time till start of upload: 0.520307s, Duration upload: 154.855503s
+Create time: 161219.440820s, Start time: 161219.947420s, End time: 161258.629549s, Packets: 48829
+Time till start of upload: 0.506600s, Duration upload: 38.682129s
 Upload of file "b'200MB.txt'" was finished
 finished upload of file "b'200MB.txt'"
 Upload "b'500MB.txt'"
 Receiving new file upload of file "b'500MB.txt'" with size of 500000000 bytes
-Create time: 89498.000909s, Start time: 89499.242074s, End time: 89867.931656s
-Time till start of upload: 1.241164s, Duration upload: 368.689582s
+Create time: 161275.035318s, Start time: 161276.297359s, End time: 161374.478522s, Packets: 122071
+Time till start of upload: 1.262042s, Duration upload: 98.181163s
 Upload of file "b'500MB.txt'" was finished
 finished upload of file "b'500MB.txt'"
 Upload "b'1000MB.txt'"
 Receiving new file upload of file "b'1000MB.txt'" with size of 1000000000 bytes
-Create time: 90020.297176s, Start time: 90022.853274s, End time: 90765.438757s
-Time till start of upload: 2.556099s, Duration upload: 742.585483s
+Create time: 161408.657700s, Start time: 161411.174904s, End time: 161607.810434s, Packets: 244141
+Time till start of upload: 2.517204s, Duration upload: 196.635530s
 Upload of file "b'1000MB.txt'" was finished
 finished upload of file "b'1000MB.txt'"

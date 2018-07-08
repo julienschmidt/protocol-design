@@ -102,9 +102,9 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
 
         self.transport = None
         self.resend_delay = 1.0  # Fixed value because no congestion control
-        self.chunk_size = 1024  # Should be adjusted to MTU later
-        self.max_send_ahead = 4
-        self.max_buf_ahead = 4
+        self.chunk_size = 4096 # Should be adjusted to MTU later
+        self.max_send_ahead = 8
+        self.max_buf_ahead = 8
 
         # stores the fileinfo for the local files
         self.fileinfo = dict()

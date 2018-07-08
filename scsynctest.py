@@ -104,10 +104,11 @@ def main():
     # create_or_clear(client_two_dir)
 
     args.test = True
-    args.port = 5000
-    args.cc = 5000
-    args.host = 'localhost'
+
     args.server = True
+    args.port = 5000
+    args.host = 'localhost'
+    args.cc = 5000
 
     # Start Server
     def startServer(args):
@@ -122,7 +123,7 @@ def main():
     server_thread = threading.Thread(target=startServer, args=(copy.deepcopy(args), ))
     server_thread.start()
 
-    time.sleep(1)
+    time.sleep(2)
 
     # Start Client 1
     def startClient1(args):
@@ -163,19 +164,19 @@ def main():
     create_file(5, client_one_dir)
     # TODO: Only start next upload when previous is complete
     # TODO: Measure how much data is end and what the overhead is
-    time.sleep(5)
+    time.sleep(2)
 
     create_file(50, client_one_dir)
-    time.sleep(50)
+    time.sleep(11)
 
     create_file(100, client_one_dir)
-    time.sleep(100)
+    time.sleep(22)
 
     create_file(200, client_one_dir)
-    time.sleep(200)
+    time.sleep(44)
 
     create_file(500, client_one_dir)
-    time.sleep(500)
+    time.sleep(110)
 
     create_file(1000, client_one_dir)
 
