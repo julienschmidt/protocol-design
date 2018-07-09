@@ -25,14 +25,14 @@ The credentials are then stored as CSV using the format `<username>,<salt>,<veri
 **ATTENTION**: By default a "testuser" with password "testpassword" is configured, which should be replaced by proper user credentials!
 
 ### Arguments:
-`-s` Server mode: accept incoming connections from any host
-`-p` Specify the port number (default: `5000`)
-`-f` Directory that should be used to upload (client mode) or store the files (server mode)
-`-h` Remote hosts
-`-cc` Packets per second
-`-cs` Chunk size (adapt to your MTU, default: `8192`)
-`--verbose` Enable logging of most events
-`--debug` Enable debug logging, all events are logged
+`-s` Server mode: accept incoming connections from any host  
+`-p` Specify the port number (default: `5000`)  
+`-f` Directory that should be used to upload (client mode) or store the files (server mode)  
+`-h` Remote hosts  
+`-cc` Packets per second (default: `2000`)  
+`-cs` Chunk size (adapt to your MTU, default: `8192`)  
+`--verbose` Enable logging of most events  
+`--debug` Enable debug logging, all events are logged  
 
 ## Test:
 `scsynctest [-f <directory-path>]`  

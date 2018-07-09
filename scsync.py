@@ -46,7 +46,7 @@ def main():
     parser.add_argument('-f', dest='path', action='store',
                         default=os.getcwd(), help='directory path containing files')
     parser.add_argument('-cc', dest='cc', action='store',
-                        default=5000, type=int, help='packets per second')
+                        default=2000, type=int, help='packets per second')
 
     parser.add_argument('-u', dest='user', action='store',
                         default='', help='client username')

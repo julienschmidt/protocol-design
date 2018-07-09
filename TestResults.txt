@@ -13,43 +13,43 @@ Syncing path: /Users/paulschmiedmayer/Desktop/Test/client1/
 
 Upload "b'5MB.txt'"
 Receiving new file upload of file "b'5MB.txt'" with size of 5000000 bytes
-Create time: 139.896039s, Start time: 139.913758s, End time: 140.409379s, Packets: 611
-Time till start of upload: 0.017719s, Duration upload: 0.495621s
+Create time: 13877.765248s, Start time: 13877.782021s, End time: 13878.289745s, Packets: 611
+Time till start of upload: 0.016772s, Duration upload: 0.507725s
 Bytes sent total: 5031161 bytes, Overhead: 31161 bytes, Payload: 5000000 bytes
 Upload of file "b'5MB.txt'" was finished
 finished upload of file "b'5MB.txt'"
 Upload "b'50MB.txt'"
 Receiving new file upload of file "b'50MB.txt'" with size of 50000000 bytes
-Create time: 143.040899s, Start time: 143.481882s, End time: 148.464096s, Packets: 6104
-Time till start of upload: 0.440982s, Duration upload: 4.982215s
+Create time: 13880.917788s, Start time: 13881.055088s, End time: 13886.227273s, Packets: 6104
+Time till start of upload: 0.137299s, Duration upload: 5.172185s
 Bytes sent total: 50311304 bytes, Overhead: 311304 bytes, Payload: 50000000 bytes
 Upload of file "b'50MB.txt'" was finished
 finished upload of file "b'50MB.txt'"
 Upload "b'100MB.txt'"
 Receiving new file upload of file "b'100MB.txt'" with size of 100000000 bytes
-Create time: 151.332985s, Start time: 151.597152s, End time: 161.367085s, Packets: 12208
-Time till start of upload: 0.264167s, Duration upload: 9.769934s
+Create time: 13889.252218s, Start time: 13889.516393s, End time: 13900.666503s, Packets: 12208
+Time till start of upload: 0.264176s, Duration upload: 11.150110s
 Bytes sent total: 100622608 bytes, Overhead: 622608 bytes, Payload: 100000000 bytes
 Upload of file "b'100MB.txt'" was finished
 finished upload of file "b'100MB.txt'"
 Upload "b'200MB.txt'"
 Receiving new file upload of file "b'200MB.txt'" with size of 200000000 bytes
-Create time: 167.049826s, Start time: 167.548084s, End time: 187.055846s, Packets: 24415
-Time till start of upload: 0.498258s, Duration upload: 19.507762s
+Create time: 13905.428924s, Start time: 13905.955521s, End time: 13927.126448s, Packets: 24415
+Time till start of upload: 0.526597s, Duration upload: 21.170927s
 Bytes sent total: 201245165 bytes, Overhead: 1245165 bytes, Payload: 200000000 bytes
 Upload of file "b'200MB.txt'" was finished
 finished upload of file "b'200MB.txt'"
 Upload "b'500MB.txt'"
 Receiving new file upload of file "b'500MB.txt'" with size of 500000000 bytes
-Create time: 200.948142s, Start time: 202.205082s, End time: 252.192283s, Packets: 61036
-Time till start of upload: 1.256941s, Duration upload: 49.987201s
+Create time: 13939.757362s, Start time: 13941.251567s, End time: 13999.513171s, Packets: 61036
+Time till start of upload: 1.494205s, Duration upload: 58.261605s
 Bytes sent total: 503112836 bytes, Overhead: 3112836 bytes, Payload: 500000000 bytes
 Upload of file "b'500MB.txt'" was finished
 finished upload of file "b'500MB.txt'"
 Upload "b'1000MB.txt'"
 Receiving new file upload of file "b'1000MB.txt'" with size of 1000000000 bytes
-Create time: 278.555651s, Start time: 281.004373s, End time: 386.751484s, Packets: 122071
-Time till start of upload: 2.448723s, Duration upload: 105.747110s
+Create time: 14025.091161s, Start time: 14028.194255s, End time: 14143.079572s, Packets: 122071
+Time till start of upload: 3.103094s, Duration upload: 114.885317s
 Bytes sent total: 1006225621 bytes, Overhead: 6225621 bytes, Payload: 1000000000 bytes
 Upload of file "b'1000MB.txt'" was finished
 finished upload of file "b'1000MB.txt'"
