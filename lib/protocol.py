@@ -246,7 +246,6 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         Calculate and prepend a packet hash for the given data and send it as an
         UDP datagram.
         """
-
         nonce = None
 
         # determine by the packet type whether the packet should be encrypted
@@ -1896,7 +1895,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         """
         Upload the given file to server.
         """
-        self.times[filename] = {'create': time.monotonic()}
+        if self.test:
+            self.times[filename] = {'create': time.monotonic()}
 
         if fileinfo is None:
             fileinfo = self.get_fileinfo(filename.decode('utf8'))
@@ -2020,7 +2020,8 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         File_Upload packets. It then waits for acknowledgment and resends
         the packet if the sent chunk is not acknowledged.
         """
-        self.times[filename].update({'start':time.monotonic()})
+        if self.test:
+            self.times[filename].update({'start':time.monotonic()})
 
         filepath = self.path + filename.decode('utf8')
         size = fileinfo['size']
@@ -2049,14 +2050,18 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
                             return
 
                         # send chunk
-                        self.send_file_upload(
-                            session_id, upload_id, pos, buf, addr=addr)
-
-                        # count send packets
-                        if 'count' in self.times[filename]:
-                            self.times[filename].update({'count':self.times[filename]['count'] + 1})
+                        
+                        if self.test:
+                            sent_size = self.send_file_upload(session_id, upload_id, pos, buf, addr=addr)
+                            # count send packets and bytes
+                            if 'count' in self.times[filename]:
+                                self.times[filename].update({'count':self.times[filename]['count'] + 1})
+                                self.times[filename].update({'bytes_sent':self.times[filename]['bytes_sent'] + sent_size})
+                            else:
+                                self.times[filename].update({'count':1})
+                                self.times[filename].update({'bytes_sent':sent_size})
                         else:
-                            self.times[filename].update({'count':1})
+                            self.send_file_upload(session_id, upload_id, pos, buf, addr=addr)
 
                         expiry_time = self.loop.time() + self.resend_delay
                         chunk_buffer.put(expiry_time, pos, buf)
@@ -2112,17 +2117,27 @@ class BaseScsyncProtocol(asyncio.DatagramProtocol):
         del self.active_uploads[filename]
         self.epoch += 1
 
-        # print upload times TODO maybe logging?
-        self.times[filename].update({'end':time.monotonic()})
-        atm_time = self.times[filename]['end']
-        create_time = self.times[filename]['create']
-        start_time = self.times[filename]['start']
-        packets = self.times[filename]['count']
-        print("Create time: %fs, Start time: %fs, End time: %fs, Packets: %d" % (create_time, start_time, atm_time, packets))
-        print("Time till start of upload: %fs, Duration upload: %fs" %(start_time - create_time, atm_time - start_time))
+        if self.test:
+            # print upload times TODO maybe logging?
+            self.times[filename].update({'end':time.monotonic()})
+            atm_time = self.times[filename]['end']
+            create_time = self.times[filename]['create']
+            start_time = self.times[filename]['start']
+            packets = self.times[filename]['count']
 
-        # Clean list
-        self.times.pop(filename)
+            #calculate send bytes and overhead
+            sent_bytes = self.times[filename]['bytes_sent']
+            # general overhead per encryption: sessionID = 8, Nonce = 12, encryption = 16, AEAD data = 0
+            # overhead per File_Upload packet: type = 1, ID = 4, start = 8, length = 2
+            overhead_bytes = (36 + 15) * packets
+            payload_bytes = sent_bytes - overhead_bytes
+
+            print("Create time: %fs, Start time: %fs, End time: %fs, Packets: %d" % (create_time, start_time, atm_time, packets))
+            print("Time till start of upload: %fs, Duration upload: %fs" %(start_time - create_time, atm_time - start_time))
+            print("Bytes sent total: %d bytes, Overhead: %d bytes, Payload: %d bytes" %(sent_bytes, overhead_bytes, payload_bytes))
+
+            # Clean list
+            self.times.pop(filename)
 
         print("Upload of file \"%s\" was finished" % filename)
 
